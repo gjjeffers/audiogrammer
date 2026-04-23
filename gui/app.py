@@ -182,11 +182,12 @@ class AudiogrammerApp:
 
     def _browse_bg(self) -> None:
         path = filedialog.askopenfilename(
-            title="Select background (GIF or MP4)",
+            title="Select background",
             filetypes=[
-                ("Video/GIF files", "*.gif *.mp4 *.mov *.webm"),
+                ("All supported", "*.gif *.mp4 *.mov *.webm *.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"),
                 ("GIF files", "*.gif"),
-                ("MP4 files", "*.mp4"),
+                ("Video files", "*.mp4 *.mov *.webm"),
+                ("Image files", "*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"),
                 ("All files", "*.*"),
             ],
         )

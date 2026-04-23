@@ -101,6 +101,15 @@ def _load_background(
 
         return get_gif_frame, lambda: None
 
+    elif ext in {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}:
+        if status_callback:
+            status_callback("Loading image background...")
+        img = Image.open(bg_path).convert("RGBA")
+        scaler, _ = _make_scaler(img.size[0], img.size[1], target_size)
+        frame = scaler(img)
+
+        return lambda t: frame, lambda: None
+
     else:
         # MP4 / any video — decode on demand to keep memory low
         try:
