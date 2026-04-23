@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 import numpy as np
@@ -6,6 +7,10 @@ from PIL import Image
 from core.renderer import render_frame
 from core.transcriber import Segment
 
+
+# ---------------------------------------------------------------------------
+# GIF helpers
+# ---------------------------------------------------------------------------
 
 def _load_gif(gif_path: str) -> Tuple[List[Image.Image], List[float]]:
     """Return (frames, durations_in_seconds). Durations default to 100ms."""
@@ -24,7 +29,6 @@ def _load_gif(gif_path: str) -> Tuple[List[Image.Image], List[float]]:
 
 
 def _frame_at(frames: List[Image.Image], durations: List[float], total: float, t: float) -> Image.Image:
-    """Return the GIF frame for time t (looping)."""
     if total <= 0:
         return frames[0]
     t_mod = t % total
@@ -36,36 +40,98 @@ def _frame_at(frames: List[Image.Image], durations: List[float], total: float, t
     return frames[-1]
 
 
-def _scale_frames(
-    frames: List[Image.Image],
+# ---------------------------------------------------------------------------
+# Scaling
+# ---------------------------------------------------------------------------
+
+def _make_scaler(
+    src_w: int,
+    src_h: int,
     target_size: Optional[Tuple[int, int]],
     min_width: int = 480,
-) -> List[Image.Image]:
-    """Scale frames to target_size with letterboxing, or enforce min_width."""
-    w, h = frames[0].size
-
+) -> Tuple[Callable[[Image.Image], Image.Image], Tuple[int, int]]:
+    """Return (scale_fn, output_size)."""
     if target_size is not None:
         tw, th = target_size
-        scale = min(tw / w, th / h)
-        new_w, new_h = int(w * scale), int(h * scale)
-        out = []
-        for frame in frames:
+        scale = min(tw / src_w, th / src_h)
+        new_w, new_h = int(src_w * scale), int(src_h * scale)
+        ox, oy = (tw - new_w) // 2, (th - new_h) // 2
+
+        def _scale(frame: Image.Image) -> Image.Image:
             scaled = frame.resize((new_w, new_h), Image.LANCZOS)
             canvas = Image.new("RGBA", (tw, th), (0, 0, 0, 255))
-            canvas.paste(scaled, ((tw - new_w) // 2, (th - new_h) // 2))
-            out.append(canvas)
-        return out
+            canvas.paste(scaled, (ox, oy))
+            return canvas
 
-    if w < min_width:
-        scale = min_width / w
-        new_size = (int(w * scale), int(h * scale))
-        return [f.resize(new_size, Image.LANCZOS) for f in frames]
+        return _scale, (tw, th)
 
-    return frames
+    if src_w < min_width:
+        factor = min_width / src_w
+        new_size = (int(src_w * factor), int(src_h * factor))
 
+        def _scale(frame: Image.Image) -> Image.Image:  # type: ignore[misc]
+            return frame.resize(new_size, Image.LANCZOS)
+
+        return _scale, new_size
+
+    return lambda f: f, (src_w, src_h)
+
+
+# ---------------------------------------------------------------------------
+# Background loader — returns (get_frame_fn, cleanup_fn)
+# ---------------------------------------------------------------------------
+
+def _load_background(
+    bg_path: str,
+    target_size: Optional[Tuple[int, int]],
+    status_callback: Optional[Callable[[str], None]],
+) -> Tuple[Callable[[float], Image.Image], Callable[[], None]]:
+    ext = Path(bg_path).suffix.lower()
+
+    if ext == ".gif":
+        if status_callback:
+            status_callback("Loading GIF frames...")
+        frames, durations = _load_gif(bg_path)
+        scaler, _ = _make_scaler(frames[0].size[0], frames[0].size[1], target_size)
+        frames = [scaler(f) for f in frames]
+        total = sum(durations)
+
+        def get_gif_frame(t: float) -> Image.Image:
+            return _frame_at(frames, durations, total, t)
+
+        return get_gif_frame, lambda: None
+
+    else:
+        # MP4 / any video — decode on demand to keep memory low
+        try:
+            from moviepy import VideoFileClip
+        except ImportError:
+            from moviepy.editor import VideoFileClip  # type: ignore[no-redef]
+
+        if status_callback:
+            status_callback("Loading video background...")
+
+        bg_clip = VideoFileClip(bg_path)
+        bg_duration = bg_clip.duration
+        src_w = int(bg_clip.size[0])
+        src_h = int(bg_clip.size[1])
+        scaler, _ = _make_scaler(src_w, src_h, target_size)
+
+        def get_mp4_frame(t: float) -> Image.Image:
+            t_mod = t % bg_duration
+            arr = bg_clip.get_frame(t_mod)
+            frame = Image.fromarray(arr.astype("uint8")).convert("RGBA")
+            return scaler(frame)
+
+        return get_mp4_frame, bg_clip.close
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
 
 def compose_video(
-    gif_path: str,
+    bg_path: str,
     audio_path: str,
     segments: List[Segment],
     output_path: str,
@@ -84,12 +150,7 @@ def compose_video(
     except ImportError:
         from moviepy.editor import AudioFileClip, VideoClip  # type: ignore[no-redef]
 
-    if status_callback:
-        status_callback("Loading GIF frames...")
-
-    frames, durations = _load_gif(gif_path)
-    frames = _scale_frames(frames, target_size)
-    total_gif_dur = sum(durations)
+    get_bg_frame, bg_cleanup = _load_background(bg_path, target_size, status_callback)
 
     if status_callback:
         status_callback("Loading audio...")
@@ -100,8 +161,8 @@ def compose_video(
     rendered_count = [0]
 
     def make_frame(t: float) -> np.ndarray:
-        gif_frame = _frame_at(frames, durations, total_gif_dur, t)
-        img = render_frame(gif_frame, segments, t, font_size, text_color, highlight_color)
+        bg = get_bg_frame(t)
+        img = render_frame(bg, segments, t, font_size, text_color, highlight_color)
         rendered_count[0] += 1
         if progress_callback:
             progress_callback(min(rendered_count[0] / total_frames, 1.0))
@@ -127,3 +188,4 @@ def compose_video(
     )
 
     audio.close()
+    bg_cleanup()

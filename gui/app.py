@@ -6,9 +6,9 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 # (target_size, suggested_font_size)
 _RESOLUTIONS = {
-    "Native (GIF size)": (None, 40),
-    "720p  (1280×720)":  ((1280, 720), 52),
-    "1080p (1920×1080)": ((1920, 1080), 72),
+    "Native (source size)": (None, 40),
+    "720p  (1280×720)":     ((1280, 720), 52),
+    "1080p (1920×1080)":    ((1920, 1080), 72),
 }
 
 # (crf, x264_preset)
@@ -38,13 +38,13 @@ class AudiogrammerApp:
             pass
 
         # ---- State --------------------------------------------------------
-        self.gif_path = tk.StringVar()
+        self.bg_path = tk.StringVar()
         self.mp3_path = tk.StringVar()
         self.output_path = tk.StringVar(value="audiogram.mp4")
         self.model_size = tk.StringVar(value="base")
         self.font_size = tk.IntVar(value=72)
         self.fps = tk.IntVar(value=24)
-        self.resolution = tk.StringVar(value="1080p (1920×1080)")
+        self.resolution = tk.StringVar(value="1080p (1920×1080)")  # must match a key in _RESOLUTIONS
         self.quality = tk.StringVar(value="High")
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
@@ -67,9 +67,9 @@ class AudiogrammerApp:
         files = ttk.LabelFrame(root_frame, text="Input Files", padding=8)
         files.pack(fill=tk.X, pady=(0, 8))
 
-        ttk.Label(files, text="GIF File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Entry(files, textvariable=self.gif_path).grid(row=0, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
-        ttk.Button(files, text="Browse…", command=self._browse_gif).grid(row=0, column=2, pady=4)
+        ttk.Label(files, text="Background:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Entry(files, textvariable=self.bg_path).grid(row=0, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
+        ttk.Button(files, text="Browse…", command=self._browse_bg).grid(row=0, column=2, pady=4)
 
         ttk.Label(files, text="MP3 File:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
         ttk.Entry(files, textvariable=self.mp3_path).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
@@ -180,13 +180,18 @@ class AudiogrammerApp:
     # Browse helpers
     # ------------------------------------------------------------------
 
-    def _browse_gif(self) -> None:
+    def _browse_bg(self) -> None:
         path = filedialog.askopenfilename(
-            title="Select GIF",
-            filetypes=[("GIF files", "*.gif"), ("All files", "*.*")],
+            title="Select background (GIF or MP4)",
+            filetypes=[
+                ("Video/GIF files", "*.gif *.mp4 *.mov *.webm"),
+                ("GIF files", "*.gif"),
+                ("MP4 files", "*.mp4"),
+                ("All files", "*.*"),
+            ],
         )
         if path:
-            self.gif_path.set(path)
+            self.bg_path.set(path)
 
     def _browse_mp3(self) -> None:
         path = filedialog.askopenfilename(
@@ -233,12 +238,12 @@ class AudiogrammerApp:
         if self._running:
             return
 
-        gif = self.gif_path.get().strip()
+        bg = self.bg_path.get().strip()
         mp3 = self.mp3_path.get().strip()
         out = self.output_path.get().strip()
 
-        if not gif:
-            messagebox.showerror("Missing input", "Please select a GIF file.")
+        if not bg:
+            messagebox.showerror("Missing input", "Please select a background file (GIF or MP4).")
             return
         if not mp3:
             messagebox.showerror("Missing input", "Please select an MP3 file.")
@@ -255,12 +260,12 @@ class AudiogrammerApp:
 
         thread = threading.Thread(
             target=self._worker,
-            args=(gif, mp3, out),
+            args=(bg, mp3, out),
             daemon=True,
         )
         thread.start()
 
-    def _worker(self, gif_path: str, mp3_path: str, output_path: str) -> None:
+    def _worker(self, bg_path: str, mp3_path: str, output_path: str) -> None:
         try:
             from core.composer import compose_video
             from core.transcriber import transcribe
@@ -283,7 +288,7 @@ class AudiogrammerApp:
             crf, preset = _QUALITIES.get(self.quality.get(), (18, "slow"))
 
             compose_video(
-                gif_path=gif_path,
+                bg_path=bg_path,
                 audio_path=mp3_path,
                 segments=segments,
                 output_path=output_path,
