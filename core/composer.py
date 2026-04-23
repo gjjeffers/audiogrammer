@@ -36,13 +36,31 @@ def _frame_at(frames: List[Image.Image], durations: List[float], total: float, t
     return frames[-1]
 
 
-def _ensure_min_size(frames: List[Image.Image], min_width: int = 480) -> List[Image.Image]:
-    """Upscale frames if the GIF is too small for readable text."""
+def _scale_frames(
+    frames: List[Image.Image],
+    target_size: Optional[Tuple[int, int]],
+    min_width: int = 480,
+) -> List[Image.Image]:
+    """Scale frames to target_size with letterboxing, or enforce min_width."""
     w, h = frames[0].size
+
+    if target_size is not None:
+        tw, th = target_size
+        scale = min(tw / w, th / h)
+        new_w, new_h = int(w * scale), int(h * scale)
+        out = []
+        for frame in frames:
+            scaled = frame.resize((new_w, new_h), Image.LANCZOS)
+            canvas = Image.new("RGBA", (tw, th), (0, 0, 0, 255))
+            canvas.paste(scaled, ((tw - new_w) // 2, (th - new_h) // 2))
+            out.append(canvas)
+        return out
+
     if w < min_width:
         scale = min_width / w
         new_size = (int(w * scale), int(h * scale))
-        frames = [f.resize(new_size, Image.LANCZOS) for f in frames]
+        return [f.resize(new_size, Image.LANCZOS) for f in frames]
+
     return frames
 
 
@@ -55,6 +73,9 @@ def compose_video(
     font_size: int = 40,
     text_color: Tuple[int, int, int] = (255, 255, 255),
     highlight_color: Tuple[int, int, int] = (255, 220, 0),
+    target_size: Optional[Tuple[int, int]] = None,
+    crf: int = 18,
+    preset: str = "slow",
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
@@ -67,9 +88,8 @@ def compose_video(
         status_callback("Loading GIF frames...")
 
     frames, durations = _load_gif(gif_path)
-    frames = _ensure_min_size(frames)
+    frames = _scale_frames(frames, target_size)
     total_gif_dur = sum(durations)
-    width, height = frames[0].size
 
     if status_callback:
         status_callback("Loading audio...")
@@ -102,6 +122,7 @@ def compose_video(
         fps=fps,
         codec="libx264",
         audio_codec="aac",
+        ffmpeg_params=["-crf", str(crf), "-preset", preset],
         logger=None,
     )
 

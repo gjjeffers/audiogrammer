@@ -4,6 +4,20 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+# (target_size, suggested_font_size)
+_RESOLUTIONS = {
+    "Native (GIF size)": (None, 40),
+    "720p  (1280×720)":  ((1280, 720), 52),
+    "1080p (1920×1080)": ((1920, 1080), 72),
+}
+
+# (crf, x264_preset)
+_QUALITIES = {
+    "Fast":     (28, "veryfast"),
+    "Balanced": (23, "medium"),
+    "High":     (18, "slow"),
+}
+
 
 def _hex_to_rgb(hex_color: str) -> tuple:
     h = hex_color.lstrip("#")
@@ -14,7 +28,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("580x520")
+        self.root.geometry("600x580")
         self.root.resizable(True, True)
 
         try:
@@ -28,8 +42,10 @@ class AudiogrammerApp:
         self.mp3_path = tk.StringVar()
         self.output_path = tk.StringVar(value="audiogram.mp4")
         self.model_size = tk.StringVar(value="base")
-        self.font_size = tk.IntVar(value=40)
+        self.font_size = tk.IntVar(value=72)
         self.fps = tk.IntVar(value=24)
+        self.resolution = tk.StringVar(value="1080p (1920×1080)")
+        self.quality = tk.StringVar(value="High")
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
 
@@ -70,23 +86,44 @@ class AudiogrammerApp:
             settings,
             textvariable=self.model_size,
             values=["tiny", "base", "small", "medium", "large"],
-            width=10,
+            width=14,
             state="readonly",
         )
         model_cb.grid(row=0, column=1, sticky=tk.W, pady=4)
         ttk.Label(settings, text="  (larger = more accurate, slower)").grid(row=0, column=2, sticky=tk.W)
 
-        ttk.Label(settings, text="Font Size:").grid(row=1, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=96, width=6).grid(
-            row=1, column=1, sticky=tk.W, pady=4
+        ttk.Label(settings, text="Resolution:").grid(row=1, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        res_cb = ttk.Combobox(
+            settings,
+            textvariable=self.resolution,
+            values=list(_RESOLUTIONS.keys()),
+            width=20,
+            state="readonly",
+        )
+        res_cb.grid(row=1, column=1, sticky=tk.W, pady=4)
+        res_cb.bind("<<ComboboxSelected>>", self._on_resolution_changed)
+
+        ttk.Label(settings, text="Quality:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Combobox(
+            settings,
+            textvariable=self.quality,
+            values=list(_QUALITIES.keys()),
+            width=14,
+            state="readonly",
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+        ttk.Label(settings, text="  (High = CRF 18, slow preset)").grid(row=2, column=2, sticky=tk.W)
+
+        ttk.Label(settings, text="Font Size:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=160, width=6).grid(
+            row=3, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Video FPS:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Video FPS:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
-            row=2, column=1, sticky=tk.W, pady=4
+            row=4, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Text Color:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Text Color:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._text_color_btn = tk.Button(
             settings,
             bg=self.text_color,
@@ -94,9 +131,9 @@ class AudiogrammerApp:
             relief=tk.GROOVE,
             command=self._pick_text_color,
         )
-        self._text_color_btn.grid(row=3, column=1, sticky=tk.W, pady=4)
+        self._text_color_btn.grid(row=5, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Highlight Color:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Highlight Color:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._highlight_btn = tk.Button(
             settings,
             bg=self.highlight_color,
@@ -104,7 +141,7 @@ class AudiogrammerApp:
             relief=tk.GROOVE,
             command=self._pick_highlight_color,
         )
-        self._highlight_btn.grid(row=4, column=1, sticky=tk.W, pady=4)
+        self._highlight_btn.grid(row=6, column=1, sticky=tk.W, pady=4)
 
         # ---- Output ------------------------------------------------------
         output = ttk.LabelFrame(root_frame, text="Output", padding=8)
@@ -184,6 +221,10 @@ class AudiogrammerApp:
             self.highlight_color = result[1]
             self._highlight_btn.config(bg=self.highlight_color)
 
+    def _on_resolution_changed(self, _event=None) -> None:
+        _, suggested_font = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
+        self.font_size.set(suggested_font)
+
     # ------------------------------------------------------------------
     # Generation
     # ------------------------------------------------------------------
@@ -238,6 +279,9 @@ class AudiogrammerApp:
             )
             self._queue.put(("switch_determinate", 50))
 
+            target_size, _ = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
+            crf, preset = _QUALITIES.get(self.quality.get(), (18, "slow"))
+
             compose_video(
                 gif_path=gif_path,
                 audio_path=mp3_path,
@@ -247,6 +291,9 @@ class AudiogrammerApp:
                 font_size=self.font_size.get(),
                 text_color=_hex_to_rgb(self.text_color),
                 highlight_color=_hex_to_rgb(self.highlight_color),
+                target_size=target_size,
+                crf=crf,
+                preset=preset,
                 status_callback=status,
                 progress_callback=video_progress,
             )
