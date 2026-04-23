@@ -39,7 +39,7 @@ class AudiogrammerApp:
 
         # ---- State --------------------------------------------------------
         self.bg_path = tk.StringVar()
-        self.mp3_path = tk.StringVar()
+        self.audio_path = tk.StringVar()
         self.output_path = tk.StringVar(value="audiogram.mp4")
         self.model_size = tk.StringVar(value="base")
         self.font_size = tk.IntVar(value=72)
@@ -71,9 +71,9 @@ class AudiogrammerApp:
         ttk.Entry(files, textvariable=self.bg_path).grid(row=0, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
         ttk.Button(files, text="Browse…", command=self._browse_bg).grid(row=0, column=2, pady=4)
 
-        ttk.Label(files, text="MP3 File:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Entry(files, textvariable=self.mp3_path).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
-        ttk.Button(files, text="Browse…", command=self._browse_mp3).grid(row=1, column=2, pady=4)
+        ttk.Label(files, text="Audio File:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Entry(files, textvariable=self.audio_path).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
+        ttk.Button(files, text="Browse…", command=self._browse_audio).grid(row=1, column=2, pady=4)
 
         files.columnconfigure(1, weight=1)
 
@@ -194,13 +194,18 @@ class AudiogrammerApp:
         if path:
             self.bg_path.set(path)
 
-    def _browse_mp3(self) -> None:
+    def _browse_audio(self) -> None:
         path = filedialog.askopenfilename(
-            title="Select MP3",
-            filetypes=[("MP3 files", "*.mp3"), ("Audio files", "*.mp3 *.wav *.m4a"), ("All files", "*.*")],
+            title="Select audio file",
+            filetypes=[
+                ("Audio files", "*.mp3 *.wav *.m4a *.aac *.flac *.ogg"),
+                ("MP3 files", "*.mp3"),
+                ("WAV files", "*.wav"),
+                ("All files", "*.*"),
+            ],
         )
         if path:
-            self.mp3_path.set(path)
+            self.audio_path.set(path)
             if self.output_path.get() in ("", "audiogram.mp4"):
                 stem = Path(path).stem
                 suggested = str(Path(path).parent / f"{stem}_audiogram.mp4")
@@ -240,14 +245,14 @@ class AudiogrammerApp:
             return
 
         bg = self.bg_path.get().strip()
-        mp3 = self.mp3_path.get().strip()
+        audio = self.audio_path.get().strip()
         out = self.output_path.get().strip()
 
         if not bg:
             messagebox.showerror("Missing input", "Please select a background file (GIF or MP4).")
             return
-        if not mp3:
-            messagebox.showerror("Missing input", "Please select an MP3 file.")
+        if not audio:
+            messagebox.showerror("Missing input", "Please select an audio file.")
             return
         if not out:
             messagebox.showerror("Missing output", "Please specify an output file path.")
@@ -261,12 +266,12 @@ class AudiogrammerApp:
 
         thread = threading.Thread(
             target=self._worker,
-            args=(bg, mp3, out),
+            args=(bg, audio, out),
             daemon=True,
         )
         thread.start()
 
-    def _worker(self, bg_path: str, mp3_path: str, output_path: str) -> None:
+    def _worker(self, bg_path: str, audio_path: str, output_path: str) -> None:
         try:
             from core.composer import compose_video
             from core.transcriber import transcribe
@@ -279,7 +284,7 @@ class AudiogrammerApp:
                 self._queue.put(("progress", 50 + p * 50))
 
             segments = transcribe(
-                mp3_path,
+                audio_path,
                 model_size=self.model_size.get(),
                 status_callback=status,
             )
@@ -290,7 +295,7 @@ class AudiogrammerApp:
 
             compose_video(
                 bg_path=bg_path,
-                audio_path=mp3_path,
+                audio_path=audio_path,
                 segments=segments,
                 output_path=output_path,
                 fps=self.fps.get(),
