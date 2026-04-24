@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
@@ -151,6 +152,7 @@ def compose_video(
     target_size: Optional[Tuple[int, int]] = None,
     crf: int = 18,
     preset: str = "slow",
+    cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
@@ -170,6 +172,8 @@ def compose_video(
     rendered_count = [0]
 
     def make_frame(t: float) -> np.ndarray:
+        if cancel_event is not None and cancel_event.is_set():
+            raise InterruptedError
         bg = get_bg_frame(t)
         img = render_frame(bg, segments, t, font_size, text_color, highlight_color)
         rendered_count[0] += 1

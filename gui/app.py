@@ -6,9 +6,11 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 # (target_size, suggested_font_size)
 _RESOLUTIONS = {
-    "Native (source size)": (None, 40),
-    "720p  (1280×720)":     ((1280, 720), 52),
-    "1080p (1920×1080)":    ((1920, 1080), 72),
+    "Native (source size)":       (None, 40),
+    "Square 1080×1080 (1:1)":     ((1080, 1080), 64),
+    "720p 1280×720 (16:9)":       ((1280, 720), 52),
+    "1080p 1920×1080 (16:9)":     ((1920, 1080), 72),
+    "Vertical 1080×1920 (9:16)":  ((1080, 1920), 64),
 }
 
 # (crf, x264_preset)
@@ -28,7 +30,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("600x580")
+        self.root.geometry("620x640")
         self.root.resizable(True, True)
 
         try:
@@ -44,13 +46,17 @@ class AudiogrammerApp:
         self.model_size = tk.StringVar(value="base")
         self.font_size = tk.IntVar(value=72)
         self.fps = tk.IntVar(value=24)
-        self.resolution = tk.StringVar(value="1080p (1920×1080)")  # must match a key in _RESOLUTIONS
+        self.resolution = tk.StringVar(value="1080p 1920×1080 (16:9)")
         self.quality = tk.StringVar(value="High")
+        self.review_transcript = tk.BooleanVar(value=False)
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
 
         self._queue: queue.Queue = queue.Queue()
         self._running = False
+        self._cancel_event = threading.Event()
+        self._transcript_ready = threading.Event()
+        self._edited_segments = None
 
         self._build_ui()
         self._poll()
@@ -92,56 +98,56 @@ class AudiogrammerApp:
         model_cb.grid(row=0, column=1, sticky=tk.W, pady=4)
         ttk.Label(settings, text="  (larger = more accurate, slower)").grid(row=0, column=2, sticky=tk.W)
 
-        ttk.Label(settings, text="Resolution:").grid(row=1, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Checkbutton(
+            settings,
+            text="Review transcript before rendering",
+            variable=self.review_transcript,
+        ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=4)
+
+        ttk.Label(settings, text="Resolution:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         res_cb = ttk.Combobox(
             settings,
             textvariable=self.resolution,
             values=list(_RESOLUTIONS.keys()),
-            width=20,
+            width=26,
             state="readonly",
         )
-        res_cb.grid(row=1, column=1, sticky=tk.W, pady=4)
+        res_cb.grid(row=2, column=1, sticky=tk.W, pady=4)
         res_cb.bind("<<ComboboxSelected>>", self._on_resolution_changed)
 
-        ttk.Label(settings, text="Quality:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Quality:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Combobox(
             settings,
             textvariable=self.quality,
             values=list(_QUALITIES.keys()),
             width=14,
             state="readonly",
-        ).grid(row=2, column=1, sticky=tk.W, pady=4)
-        ttk.Label(settings, text="  (High = CRF 18, slow preset)").grid(row=2, column=2, sticky=tk.W)
+        ).grid(row=3, column=1, sticky=tk.W, pady=4)
+        ttk.Label(settings, text="  (High = CRF 18, slow preset)").grid(row=3, column=2, sticky=tk.W)
 
-        ttk.Label(settings, text="Font Size:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Font Size:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=160, width=6).grid(
-            row=3, column=1, sticky=tk.W, pady=4
-        )
-
-        ttk.Label(settings, text="Video FPS:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
             row=4, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Text Color:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Video FPS:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
+            row=5, column=1, sticky=tk.W, pady=4
+        )
+
+        ttk.Label(settings, text="Text Color:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._text_color_btn = tk.Button(
-            settings,
-            bg=self.text_color,
-            width=5,
-            relief=tk.GROOVE,
+            settings, bg=self.text_color, width=5, relief=tk.GROOVE,
             command=self._pick_text_color,
         )
-        self._text_color_btn.grid(row=5, column=1, sticky=tk.W, pady=4)
+        self._text_color_btn.grid(row=6, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Highlight Color:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Highlight Color:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._highlight_btn = tk.Button(
-            settings,
-            bg=self.highlight_color,
-            width=5,
-            relief=tk.GROOVE,
+            settings, bg=self.highlight_color, width=5, relief=tk.GROOVE,
             command=self._pick_highlight_color,
         )
-        self._highlight_btn.grid(row=6, column=1, sticky=tk.W, pady=4)
+        self._highlight_btn.grid(row=7, column=1, sticky=tk.W, pady=4)
 
         # ---- Output ------------------------------------------------------
         output = ttk.LabelFrame(root_frame, text="Output", padding=8)
@@ -152,13 +158,17 @@ class AudiogrammerApp:
         ttk.Button(output, text="Browse…", command=self._browse_output).grid(row=0, column=2, pady=4)
         output.columnconfigure(1, weight=1)
 
-        # ---- Generate button ---------------------------------------------
-        self._gen_btn = ttk.Button(
-            root_frame,
-            text="Generate Audiogram",
-            command=self._generate,
+        # ---- Generate / Cancel buttons -----------------------------------
+        btn_row = ttk.Frame(root_frame)
+        btn_row.pack(pady=(4, 6))
+
+        self._gen_btn = ttk.Button(btn_row, text="Generate Audiogram", command=self._generate)
+        self._gen_btn.pack(side=tk.LEFT, padx=(0, 6))
+
+        self._cancel_btn = ttk.Button(
+            btn_row, text="Cancel", command=self._cancel, state=tk.DISABLED
         )
-        self._gen_btn.pack(pady=(4, 6))
+        self._cancel_btn.pack(side=tk.LEFT)
 
         # ---- Progress area -----------------------------------------------
         progress_frame = ttk.Frame(root_frame)
@@ -166,10 +176,8 @@ class AudiogrammerApp:
 
         self._progress_var = tk.DoubleVar(value=0)
         self._progress_bar = ttk.Progressbar(
-            progress_frame,
-            variable=self._progress_var,
-            maximum=100,
-            mode="determinate",
+            progress_frame, variable=self._progress_var,
+            maximum=100, mode="determinate",
         )
         self._progress_bar.pack(fill=tk.X, pady=(0, 4))
 
@@ -249,7 +257,7 @@ class AudiogrammerApp:
         out = self.output_path.get().strip()
 
         if not bg:
-            messagebox.showerror("Missing input", "Please select a background file (GIF or MP4).")
+            messagebox.showerror("Missing input", "Please select a background file.")
             return
         if not audio:
             messagebox.showerror("Missing input", "Please select an audio file.")
@@ -259,17 +267,20 @@ class AudiogrammerApp:
             return
 
         self._running = True
+        self._cancel_event.clear()
+        self._transcript_ready.clear()
         self._gen_btn.config(state=tk.DISABLED)
+        self._cancel_btn.config(state=tk.NORMAL)
         self._progress_var.set(0)
         self._progress_bar.config(mode="indeterminate")
         self._progress_bar.start(12)
 
-        thread = threading.Thread(
-            target=self._worker,
-            args=(bg, audio, out),
-            daemon=True,
-        )
-        thread.start()
+        threading.Thread(target=self._worker, args=(bg, audio, out), daemon=True).start()
+
+    def _cancel(self) -> None:
+        self._cancel_event.set()
+        self._cancel_btn.config(state=tk.DISABLED)
+        self._status_var.set("Cancelling…")
 
     def _worker(self, bg_path: str, audio_path: str, output_path: str) -> None:
         try:
@@ -280,15 +291,27 @@ class AudiogrammerApp:
                 self._queue.put(("status", msg))
 
             def video_progress(p: float) -> None:
-                # Map video progress (0-1) to 50-100% of the bar
                 self._queue.put(("progress", 50 + p * 50))
 
-            segments = transcribe(
-                audio_path,
-                model_size=self.model_size.get(),
-                status_callback=status,
-            )
+            segments = transcribe(audio_path, model_size=self.model_size.get(), status_callback=status)
+
+            # Check for cancel between transcription and rendering
+            if self._cancel_event.is_set():
+                raise InterruptedError
+
             self._queue.put(("switch_determinate", 50))
+
+            # Optional transcript review — block until user clicks Render or Cancel
+            if self.review_transcript.get():
+                self._edited_segments = segments
+                self._queue.put(("show_transcript", segments))
+                while True:
+                    if self._cancel_event.wait(timeout=0.05):
+                        raise InterruptedError
+                    if self._transcript_ready.is_set():
+                        break
+                self._transcript_ready.clear()
+                segments = self._edited_segments
 
             target_size, _ = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
             crf, preset = _QUALITIES.get(self.quality.get(), (18, "slow"))
@@ -305,12 +328,20 @@ class AudiogrammerApp:
                 target_size=target_size,
                 crf=crf,
                 preset=preset,
+                cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,
             )
             self._queue.put(("done", output_path))
+
+        except InterruptedError:
+            self._queue.put(("cancelled", output_path))
         except Exception as exc:
             self._queue.put(("error", str(exc)))
+
+    def _on_transcript_render(self, edited_segments) -> None:
+        self._edited_segments = edited_segments
+        self._transcript_ready.set()
 
     # ------------------------------------------------------------------
     # Queue polling (runs on main thread)
@@ -328,11 +359,27 @@ class AudiogrammerApp:
                     self._progress_var.set(float(value))
                 elif kind == "progress":
                     self._progress_var.set(float(value))
+                elif kind == "show_transcript":
+                    from gui.transcript_editor import TranscriptEditorDialog
+                    TranscriptEditorDialog(
+                        self.root, value,
+                        on_render=self._on_transcript_render,
+                        on_cancel=self._cancel,
+                    )
                 elif kind == "done":
                     self._progress_var.set(100)
                     self._status_var.set(f"Done! Saved to: {value}")
                     self._reset_controls()
                     messagebox.showinfo("Done", f"Audiogram saved to:\n{value}")
+                elif kind == "cancelled":
+                    self._status_var.set("Cancelled")
+                    self._progress_var.set(0)
+                    self._reset_controls()
+                    # Remove partial output and any moviepy temp audio file
+                    Path(value).unlink(missing_ok=True)
+                    stem = Path(value).stem
+                    for tmp in Path(value).parent.glob(f"{stem}_TEMP_MPY_wvf_snd.*"):
+                        tmp.unlink(missing_ok=True)
                 elif kind == "error":
                     self._status_var.set(f"Error: {value}")
                     self._reset_controls()
@@ -347,3 +394,4 @@ class AudiogrammerApp:
         self._progress_bar.stop()
         self._progress_bar.config(mode="determinate")
         self._gen_btn.config(state=tk.NORMAL)
+        self._cancel_btn.config(state=tk.DISABLED)
