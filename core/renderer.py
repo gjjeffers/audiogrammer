@@ -19,23 +19,30 @@ _FONT_CANDIDATES = [
 _font_cache: dict = {}
 
 
-def _load_font(size: int) -> ImageFont.ImageFont:
-    if size in _font_cache:
-        return _font_cache[size]
+def _load_font(size: int, font_path: str = "") -> ImageFont.ImageFont:
+    key = (size, font_path)
+    if key in _font_cache:
+        return _font_cache[key]
     font = None
-    for path in _FONT_CANDIDATES:
-        if os.path.exists(path):
-            try:
-                font = ImageFont.truetype(path, size)
-                break
-            except Exception:
-                continue
+    if font_path and os.path.exists(font_path):
+        try:
+            font = ImageFont.truetype(font_path, size)
+        except Exception:
+            font = None
+    if font is None:
+        for path in _FONT_CANDIDATES:
+            if os.path.exists(path):
+                try:
+                    font = ImageFont.truetype(path, size)
+                    break
+                except Exception:
+                    continue
     if font is None:
         try:
             font = ImageFont.load_default(size=size)
         except TypeError:
             font = ImageFont.load_default()
-    _font_cache[size] = font
+    _font_cache[key] = font
     return font
 
 
@@ -80,6 +87,7 @@ def render_frame(
     text_color: Tuple[int, int, int] = (255, 255, 255),
     highlight_color: Tuple[int, int, int] = (255, 220, 0),
     watermark: Optional[Image.Image] = None,
+    font_path: str = "",
 ) -> Image.Image:
     frame = gif_frame.convert("RGB")
 
@@ -98,7 +106,7 @@ def render_frame(
         return frame
 
     width, height = frame.size
-    font = _load_font(font_size)
+    font = _load_font(font_size, font_path)
     space_w = _text_width(font, " ")
     line_h = int(font_size * 1.45)
     h_pad = max(24, int(width * 0.05))

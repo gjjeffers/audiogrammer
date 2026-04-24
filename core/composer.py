@@ -154,6 +154,7 @@ def compose_video(
     crf: int = 18,
     preset: str = "slow",
     watermark_config: Optional[WatermarkConfig] = None,
+    font_path: str = "",
     cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -181,7 +182,7 @@ def compose_video(
         if cancel_event is not None and cancel_event.is_set():
             raise InterruptedError
         bg = get_bg_frame(t)
-        img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark)
+        img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark, font_path)
         rendered_count[0] += 1
         if progress_callback:
             progress_callback(min(rendered_count[0] / total_frames, 1.0))

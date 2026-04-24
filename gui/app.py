@@ -49,6 +49,8 @@ class AudiogrammerApp:
         self.resolution = tk.StringVar(value="1080p 1920×1080 (16:9)")
         self.quality = tk.StringVar(value="High")
         self.review_transcript = tk.BooleanVar(value=False)
+        self.font_name = tk.StringVar(value="")
+        self._font_map: dict = {}
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
 
@@ -68,6 +70,7 @@ class AudiogrammerApp:
 
         self._build_ui()
         self._poll()
+        threading.Thread(target=self._load_fonts_async, daemon=True).start()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -133,29 +136,36 @@ class AudiogrammerApp:
         ).grid(row=3, column=1, sticky=tk.W, pady=4)
         ttk.Label(settings, text="  (High = CRF 18, slow preset)").grid(row=3, column=2, sticky=tk.W)
 
-        ttk.Label(settings, text="Font Size:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=160, width=6).grid(
-            row=4, column=1, sticky=tk.W, pady=4
+        ttk.Label(settings, text="Font:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        self._font_cb = ttk.Combobox(
+            settings, textvariable=self.font_name,
+            values=["(loading fonts…)"], width=26, state="disabled",
         )
+        self._font_cb.grid(row=4, column=1, columnspan=2, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Video FPS:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
+        ttk.Label(settings, text="Font Size:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=160, width=6).grid(
             row=5, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Text Color:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Video FPS:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
+            row=6, column=1, sticky=tk.W, pady=4
+        )
+
+        ttk.Label(settings, text="Text Color:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._text_color_btn = tk.Button(
             settings, bg=self.text_color, width=5, relief=tk.GROOVE,
             command=self._pick_text_color,
         )
-        self._text_color_btn.grid(row=6, column=1, sticky=tk.W, pady=4)
+        self._text_color_btn.grid(row=7, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Highlight Color:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Highlight Color:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._highlight_btn = tk.Button(
             settings, bg=self.highlight_color, width=5, relief=tk.GROOVE,
             command=self._pick_highlight_color,
         )
-        self._highlight_btn.grid(row=7, column=1, sticky=tk.W, pady=4)
+        self._highlight_btn.grid(row=8, column=1, sticky=tk.W, pady=4)
 
         # ---- Output ------------------------------------------------------
         output = ttk.LabelFrame(root_frame, text="Output", padding=8)
@@ -225,6 +235,23 @@ class AudiogrammerApp:
 
         self._status_var = tk.StringVar(value="Ready")
         ttk.Label(progress_frame, textvariable=self._status_var, anchor=tk.W).pack(fill=tk.X)
+
+    # ------------------------------------------------------------------
+    # Font discovery
+    # ------------------------------------------------------------------
+
+    def _load_fonts_async(self) -> None:
+        from core.fonts import discover_fonts
+        self._font_map = discover_fonts()
+        self.root.after(0, self._on_fonts_loaded)
+
+    def _on_fonts_loaded(self) -> None:
+        names = list(self._font_map.keys())
+        self._font_cb.config(values=names, state="readonly")
+        default = next((n for n in names if "Liberation Sans" in n and "Bold" in n), None)
+        if default is None:
+            default = next((n for n in names if "Sans" in n and "Bold" in n), names[0] if names else "")
+        self.font_name.set(default)
 
     # ------------------------------------------------------------------
     # Browse helpers
@@ -378,6 +405,7 @@ class AudiogrammerApp:
             from core.watermark import WatermarkConfig
             target_size, _ = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
             crf, preset = _QUALITIES.get(self.quality.get(), (18, "slow"))
+            font_path = self._font_map.get(self.font_name.get(), "")
 
             _pos_map = {
                 "Top Left": "top-left", "Top Right": "top-right",
@@ -389,6 +417,7 @@ class AudiogrammerApp:
                 position=_pos_map.get(self.wm_position.get(), "bottom-right"),
                 opacity=self.wm_opacity.get() / 100.0,
                 font_size=self.wm_font_size.get(),
+                font_path=font_path,
                 color=_hex_to_rgb(self.wm_color),
             )
 
@@ -405,6 +434,7 @@ class AudiogrammerApp:
                 crf=crf,
                 preset=preset,
                 watermark_config=wm_cfg,
+                font_path=font_path,
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,

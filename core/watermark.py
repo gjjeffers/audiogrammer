@@ -12,6 +12,7 @@ class WatermarkConfig:
     position: str = "bottom-right"   # "top-left" | "top-right" | "bottom-left" | "bottom-right"
     opacity: float = 0.70             # 0.0 – 1.0
     font_size: int = 28
+    font_path: str = ""
     color: Tuple[int, int, int] = field(default_factory=lambda: (255, 255, 255))
     padding: int = 20
 
@@ -49,7 +50,7 @@ def build_watermark(
     # ---- Text element --------------------------------------------------------
     if config.text.strip():
         from core.renderer import _load_font  # reuse cached font loader
-        font = _load_font(config.font_size)
+        font = _load_font(config.font_size, config.font_path)
         text = config.text.strip()
 
         dummy_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
