@@ -30,7 +30,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("620x640")
+        self.root.geometry("620x760")
         self.root.resizable(True, True)
 
         try:
@@ -51,6 +51,14 @@ class AudiogrammerApp:
         self.review_transcript = tk.BooleanVar(value=False)
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
+
+        # Watermark state
+        self.wm_text = tk.StringVar()
+        self.wm_image_path = tk.StringVar()
+        self.wm_position = tk.StringVar(value="Bottom Right")
+        self.wm_opacity = tk.DoubleVar(value=70.0)
+        self.wm_font_size = tk.IntVar(value=28)
+        self.wm_color = "#FFFFFF"
 
         self._queue: queue.Queue = queue.Queue()
         self._running = False
@@ -158,6 +166,40 @@ class AudiogrammerApp:
         ttk.Button(output, text="Browse…", command=self._browse_output).grid(row=0, column=2, pady=4)
         output.columnconfigure(1, weight=1)
 
+        # ---- Watermark -------------------------------------------------------
+        wm = ttk.LabelFrame(root_frame, text="Watermark  (leave blank to disable)", padding=8)
+        wm.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(wm, text="Text:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Entry(wm, textvariable=self.wm_text, width=22).grid(row=0, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
+        ttk.Label(wm, text="Color:").grid(row=0, column=2, sticky=tk.W, padx=(4, 4))
+        self._wm_color_btn = tk.Button(wm, bg=self.wm_color, width=3, relief=tk.GROOVE,
+                                       command=self._pick_wm_color)
+        self._wm_color_btn.grid(row=0, column=3, padx=(0, 6), pady=4)
+        ttk.Label(wm, text="Size:").grid(row=0, column=4, sticky=tk.W)
+        ttk.Spinbox(wm, textvariable=self.wm_font_size, from_=10, to=96, width=5).grid(
+            row=0, column=5, sticky=tk.W, pady=4)
+
+        ttk.Label(wm, text="Image:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Entry(wm, textvariable=self.wm_image_path, width=22).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
+        ttk.Button(wm, text="Browse…", command=self._browse_wm_image).grid(row=1, column=2, columnspan=2, sticky=tk.W, pady=4)
+
+        ttk.Label(wm, text="Position:").grid(row=2, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Combobox(
+            wm, textvariable=self.wm_position,
+            values=["Top Left", "Top Right", "Bottom Left", "Bottom Right"],
+            width=14, state="readonly",
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+
+        ttk.Label(wm, text="Opacity:").grid(row=2, column=2, sticky=tk.W, padx=(8, 4))
+        ttk.Scale(wm, variable=self.wm_opacity, from_=0, to=100, orient=tk.HORIZONTAL,
+                  length=100).grid(row=2, column=3, columnspan=2, sticky=tk.W)
+        self._wm_opacity_label = ttk.Label(wm, text="70%", width=4)
+        self._wm_opacity_label.grid(row=2, column=5, sticky=tk.W)
+        self.wm_opacity.trace_add("write", self._update_opacity_label)
+
+        wm.columnconfigure(1, weight=1)
+
         # ---- Generate / Cancel buttons -----------------------------------
         btn_row = ttk.Frame(root_frame)
         btn_row.pack(pady=(4, 6))
@@ -240,6 +282,26 @@ class AudiogrammerApp:
             self.highlight_color = result[1]
             self._highlight_btn.config(bg=self.highlight_color)
 
+    def _browse_wm_image(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Select watermark image",
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.bmp *.webp"),
+                ("All files", "*.*"),
+            ],
+        )
+        if path:
+            self.wm_image_path.set(path)
+
+    def _pick_wm_color(self) -> None:
+        result = colorchooser.askcolor(color=self.wm_color, title="Choose watermark color")
+        if result and result[1]:
+            self.wm_color = result[1]
+            self._wm_color_btn.config(bg=self.wm_color)
+
+    def _update_opacity_label(self, *_) -> None:
+        self._wm_opacity_label.config(text=f"{int(self.wm_opacity.get())}%")
+
     def _on_resolution_changed(self, _event=None) -> None:
         _, suggested_font = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
         self.font_size.set(suggested_font)
@@ -313,8 +375,22 @@ class AudiogrammerApp:
                 self._transcript_ready.clear()
                 segments = self._edited_segments
 
+            from core.watermark import WatermarkConfig
             target_size, _ = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
             crf, preset = _QUALITIES.get(self.quality.get(), (18, "slow"))
+
+            _pos_map = {
+                "Top Left": "top-left", "Top Right": "top-right",
+                "Bottom Left": "bottom-left", "Bottom Right": "bottom-right",
+            }
+            wm_cfg = WatermarkConfig(
+                text=self.wm_text.get().strip(),
+                image_path=self.wm_image_path.get().strip(),
+                position=_pos_map.get(self.wm_position.get(), "bottom-right"),
+                opacity=self.wm_opacity.get() / 100.0,
+                font_size=self.wm_font_size.get(),
+                color=_hex_to_rgb(self.wm_color),
+            )
 
             compose_video(
                 bg_path=bg_path,
@@ -328,6 +404,7 @@ class AudiogrammerApp:
                 target_size=target_size,
                 crf=crf,
                 preset=preset,
+                watermark_config=wm_cfg,
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,

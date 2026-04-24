@@ -79,9 +79,18 @@ def render_frame(
     font_size: int = 40,
     text_color: Tuple[int, int, int] = (255, 255, 255),
     highlight_color: Tuple[int, int, int] = (255, 220, 0),
+    watermark: Optional[Image.Image] = None,
 ) -> Image.Image:
     frame = gif_frame.convert("RGB")
+
+    def _apply_watermark(img_rgba: Image.Image) -> Image.Image:
+        if watermark is not None:
+            return Image.alpha_composite(img_rgba, watermark)
+        return img_rgba
+
     if not segments:
+        if watermark is not None:
+            return _apply_watermark(frame.convert("RGBA")).convert("RGB")
         return frame
 
     seg = _active_segment(segments, t)
@@ -165,4 +174,4 @@ def render_frame(
                 color = text_color
             draw.text((x, y), wt, font=font, fill=color)
 
-    return frame_rgba.convert("RGB")
+    return _apply_watermark(frame_rgba).convert("RGB")

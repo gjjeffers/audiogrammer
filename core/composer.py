@@ -7,6 +7,7 @@ from PIL import Image
 
 from core.renderer import render_frame
 from core.transcriber import Segment
+from core.watermark import WatermarkConfig, build_watermark
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +153,7 @@ def compose_video(
     target_size: Optional[Tuple[int, int]] = None,
     crf: int = 18,
     preset: str = "slow",
+    watermark_config: Optional[WatermarkConfig] = None,
     cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -162,6 +164,10 @@ def compose_video(
         from moviepy.editor import AudioFileClip, VideoClip  # type: ignore[no-redef]
 
     get_bg_frame, bg_cleanup = _load_background(bg_path, target_size, status_callback)
+
+    # Determine output frame size and pre-build the watermark overlay once
+    first_frame = get_bg_frame(0.0)
+    watermark = build_watermark(watermark_config, first_frame.size) if watermark_config else None
 
     if status_callback:
         status_callback("Loading audio...")
@@ -175,7 +181,7 @@ def compose_video(
         if cancel_event is not None and cancel_event.is_set():
             raise InterruptedError
         bg = get_bg_frame(t)
-        img = render_frame(bg, segments, t, font_size, text_color, highlight_color)
+        img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark)
         rendered_count[0] += 1
         if progress_callback:
             progress_callback(min(rendered_count[0] / total_frames, 1.0))
