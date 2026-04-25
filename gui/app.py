@@ -51,6 +51,7 @@ class AudiogrammerApp:
         self.review_transcript = tk.BooleanVar(value=False)
         self.font_name = tk.StringVar(value="")
         self._font_map: dict = {}
+        self._preview_photo = None
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
 
@@ -142,30 +143,34 @@ class AudiogrammerApp:
             values=["(loading fonts…)"], width=26, state="disabled",
         )
         self._font_cb.grid(row=4, column=1, columnspan=2, sticky=tk.W, pady=4)
+        self.font_name.trace_add("write", self._update_font_preview)
 
-        ttk.Label(settings, text="Font Size:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        self._preview_label = tk.Label(settings, text="", anchor=tk.W, bd=1, relief=tk.SUNKEN)
+        self._preview_label.grid(row=5, column=1, columnspan=2, sticky=tk.EW, pady=(0, 6))
+
+        ttk.Label(settings, text="Font Size:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=160, width=6).grid(
-            row=5, column=1, sticky=tk.W, pady=4
-        )
-
-        ttk.Label(settings, text="Video FPS:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
             row=6, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Text Color:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Video FPS:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
+            row=7, column=1, sticky=tk.W, pady=4
+        )
+
+        ttk.Label(settings, text="Text Color:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._text_color_btn = tk.Button(
             settings, bg=self.text_color, width=5, relief=tk.GROOVE,
             command=self._pick_text_color,
         )
-        self._text_color_btn.grid(row=7, column=1, sticky=tk.W, pady=4)
+        self._text_color_btn.grid(row=8, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Highlight Color:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Highlight Color:").grid(row=9, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._highlight_btn = tk.Button(
             settings, bg=self.highlight_color, width=5, relief=tk.GROOVE,
             command=self._pick_highlight_color,
         )
-        self._highlight_btn.grid(row=8, column=1, sticky=tk.W, pady=4)
+        self._highlight_btn.grid(row=9, column=1, sticky=tk.W, pady=4)
 
         # ---- Output ------------------------------------------------------
         output = ttk.LabelFrame(root_frame, text="Output", padding=8)
@@ -252,6 +257,27 @@ class AudiogrammerApp:
         if default is None:
             default = next((n for n in names if "Sans" in n and "Bold" in n), names[0] if names else "")
         self.font_name.set(default)
+        self._update_font_preview()
+
+    def _update_font_preview(self, *_) -> None:
+        path = self._font_map.get(self.font_name.get(), "")
+        if not path:
+            self._preview_label.config(image="", text="")
+            return
+        sample = "AaBbCcDd 1234"
+        try:
+            from PIL import Image, ImageDraw, ImageFont, ImageTk
+            font = ImageFont.truetype(path, 20)
+            dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+            bbox = dummy.textbbox((0, 0), sample, font=font)
+            w = bbox[2] - bbox[0] + 20
+            h = bbox[3] - bbox[1] + 10
+            img = Image.new("RGB", (max(w, 1), max(h, 1)), (255, 255, 255))
+            ImageDraw.Draw(img).text((10, 5), sample, font=font, fill=(30, 30, 30))
+            self._preview_photo = ImageTk.PhotoImage(img)
+            self._preview_label.config(image=self._preview_photo, text="")
+        except Exception:
+            self._preview_label.config(image="", text=sample)
 
     # ------------------------------------------------------------------
     # Browse helpers
