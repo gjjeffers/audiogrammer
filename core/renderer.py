@@ -103,7 +103,7 @@ def render_frame(
 
     seg = _active_segment(segments, t)
     if seg is None or not seg.words:
-        return frame
+        return _apply_watermark(frame.convert("RGBA")).convert("RGB")
 
     width, height = frame.size
     font = _load_font(font_size, font_path)
