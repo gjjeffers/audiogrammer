@@ -1,13 +1,22 @@
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict
 
-_ASSETS_DIR = Path(__file__).parent.parent / "assets" / "fonts"
+
+def _get_assets_dir() -> Path:
+    """Return the assets/fonts directory, handling both normal and PyInstaller frozen runs."""
+    if getattr(sys, "frozen", False):
+        # Running as a PyInstaller EXE — assets are unpacked to sys._MEIPASS
+        return Path(sys._MEIPASS) / "assets" / "fonts"
+    # Normal Python run — use path relative to this source file
+    return Path(__file__).parent.parent / "assets" / "fonts"
 
 
 def discover_fonts() -> Dict[str, str]:
     """Return {display_name: abs_path} for all usable TTF/OTF fonts, sorted."""
     fonts: Dict[str, str] = {}
+    assets_dir = _get_assets_dir()
 
     # 1. fc-list (Linux/macOS with fontconfig)
     try:
@@ -43,8 +52,8 @@ def discover_fonts() -> Dict[str, str]:
                     fonts[f.stem.replace("-", " ")] = str(f)
 
     # 3. Always include bundled fonts (guaranteed fallback)
-    if _ASSETS_DIR.exists():
-        for f in sorted(_ASSETS_DIR.glob("*.ttf")):
+    if assets_dir.exists():
+        for f in sorted(assets_dir.glob("*.ttf")):
             name = f.stem.replace("-", " ")
             if name not in fonts:
                 fonts[name] = str(f)
