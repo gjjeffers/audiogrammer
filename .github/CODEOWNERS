@@ -1,0 +1,4 @@
+# CODEOWNERS - Defines who must review PRs for this repository
+# @gjjeffers is the owner and must approve all pull requests
+
+* @gjjeffers
