@@ -29,6 +29,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build EXE with PyInstaller
+        shell: bash
         run: |
           pyinstaller --onefile --noconsole --name Audiogrammer \
             --add-data "assets/fonts;assets/fonts" \
