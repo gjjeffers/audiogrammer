@@ -1,6 +1,6 @@
 openai-whisper
 moviepy>=2.2.1
-Pillow>=12.2.0
+Pillow>=11.3.0
 numpy
 imageio
 imageio-ffmpeg
