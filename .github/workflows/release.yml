@@ -31,9 +31,7 @@ jobs:
       - name: Build EXE with PyInstaller
         shell: bash
         run: |
-          pyinstaller --onefile --noconsole --name Audiogrammer \
-            --add-data "assets/fonts;assets/fonts" \
-            main.py
+          pyinstaller --onefile --noconsole --name Audiogrammer main.py
 
       - name: Upload EXE to release
         uses: softprops/action-gh-release@v2
