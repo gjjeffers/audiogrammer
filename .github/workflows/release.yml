@@ -33,9 +33,6 @@ jobs:
         run: |
           pyinstaller --onefile --noconsole --name Audiogrammer \
             --add-data "assets/fonts;assets/fonts" \
-            --hidden-import whisper \
-            --collect-data whisper \
-            --collect-submodules whisper \
             main.py
 
       - name: Upload EXE to release
