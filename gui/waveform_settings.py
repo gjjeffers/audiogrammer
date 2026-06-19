@@ -95,7 +95,9 @@ class WaveformSettingsDialog(tk.Toplevel):
         ).grid(row=5, column=1, columnspan=2, sticky=tk.W, pady=4)
         self._opacity_lbl = ttk.Label(frm, width=5)
         self._opacity_lbl.grid(row=5, column=3, sticky=tk.W)
-        self.app.wf_opacity.trace_add("write", self._update_opacity_lbl)
+        self._traces = [
+            self.app.wf_opacity.trace_add("write", self._update_opacity_lbl),
+        ]
         self._update_opacity_lbl()
 
         # Sensitivity
@@ -106,7 +108,7 @@ class WaveformSettingsDialog(tk.Toplevel):
         ).grid(row=6, column=1, columnspan=2, sticky=tk.W, pady=4)
         self._sens_lbl = ttk.Label(frm, width=5)
         self._sens_lbl.grid(row=6, column=3, sticky=tk.W)
-        self.app.wf_sensitivity.trace_add("write", self._update_sens_lbl)
+        self._traces.append(self.app.wf_sensitivity.trace_add("write", self._update_sens_lbl))
         self._update_sens_lbl()
 
         # Smoothing
@@ -117,7 +119,7 @@ class WaveformSettingsDialog(tk.Toplevel):
         ).grid(row=7, column=1, columnspan=2, sticky=tk.W, pady=4)
         self._smooth_lbl = ttk.Label(frm, width=5)
         self._smooth_lbl.grid(row=7, column=3, sticky=tk.W)
-        self.app.wf_smoothing.trace_add("write", self._update_smooth_lbl)
+        self._traces.append(self.app.wf_smoothing.trace_add("write", self._update_smooth_lbl))
         self._update_smooth_lbl()
         ttk.Label(frm, text="(reactive mode only)", foreground="#888888").grid(
             row=8, column=1, columnspan=3, sticky=tk.W
@@ -166,5 +168,8 @@ class WaveformSettingsDialog(tk.Toplevel):
         self._smooth_lbl.config(text=f"{self.app.wf_smoothing.get():.2f}")
 
     def _close(self) -> None:
+        self.app.wf_opacity.trace_remove("write", self._traces[0])
+        self.app.wf_sensitivity.trace_remove("write", self._traces[1])
+        self.app.wf_smoothing.trace_remove("write", self._traces[2])
         self.grab_release()
         self.destroy()
