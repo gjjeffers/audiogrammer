@@ -242,6 +242,17 @@ class AudiogrammerApp:
 
         wm.columnconfigure(1, weight=1)
 
+        # ---- Waveform settings launcher ----------------------------------
+        wf_row = ttk.Frame(root_frame)
+        wf_row.pack(fill=tk.X, pady=(0, 4))
+        self._wf_btn = ttk.Button(
+            wf_row, text="Waveform Settings…", command=self._open_waveform_settings
+        )
+        self._wf_btn.pack(side=tk.LEFT)
+        self._wf_status_label = ttk.Label(wf_row, text="(off)", foreground="#888888")
+        self._wf_status_label.pack(side=tk.LEFT, padx=(8, 0))
+        self.wf_enabled.trace_add("write", self._update_wf_status)
+
         # ---- Generate / Cancel buttons -----------------------------------
         btn_row = ttk.Frame(root_frame)
         btn_row.pack(pady=(4, 6))
