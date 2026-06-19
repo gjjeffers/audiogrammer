@@ -8,6 +8,7 @@ from PIL import Image
 from core.renderer import render_frame
 from core.transcriber import Segment
 from core.watermark import WatermarkConfig, build_watermark
+from core.waveform import WaveformConfig, analyze_audio, compute_region, draw_waveform
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +155,7 @@ def compose_video(
     crf: int = 18,
     preset: str = "slow",
     watermark_config: Optional[WatermarkConfig] = None,
+    waveform_config: Optional[WaveformConfig] = None,
     font_path: str = "",
     cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
@@ -178,10 +180,23 @@ def compose_video(
     total_frames = max(1, int(duration * fps))
     rendered_count = [0]
 
+    # Pre-analyze audio for the waveform overlay (once per render).
+    wf_active = waveform_config is not None and waveform_config.enabled
+    wf_data = None
+    wf_region = None
+    if wf_active:
+        if status_callback:
+            status_callback("Analyzing audio waveform…")
+        wf_data = analyze_audio(audio, fps, total_frames, waveform_config)
+        wf_region = compute_region(first_frame.size, waveform_config)
+
     def make_frame(t: float) -> np.ndarray:
         if cancel_event is not None and cancel_event.is_set():
             raise InterruptedError
         bg = get_bg_frame(t)
+        if wf_active:
+            idx = min(int(t * fps), total_frames - 1)
+            bg = draw_waveform(bg, waveform_config, wf_region, wf_data, idx, total_frames)
         img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark, font_path)
         rendered_count[0] += 1
         if progress_callback:

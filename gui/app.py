@@ -63,6 +63,22 @@ class AudiogrammerApp:
         self.wm_font_size = tk.IntVar(value=28)
         self.wm_color = "#FFFFFF"
 
+        # Waveform state (edited via the Waveform Settings dialog)
+        self.wf_enabled = tk.BooleanVar(value=False)
+        self.wf_mode = tk.StringVar(value="Reactive")
+        self.wf_style = tk.StringVar(value="Rounded Bars")
+        self.wf_opacity = tk.DoubleVar(value=90.0)
+        self.wf_placement = tk.StringVar(value="Stretch")
+        self.wf_position = tk.StringVar(value="Bottom")
+        self.wf_sensitivity = tk.DoubleVar(value=1.0)
+        self.wf_smoothing = tk.DoubleVar(value=0.5)
+        self.wf_mirror = tk.BooleanVar(value=False)
+        self.wf_bar_count = tk.IntVar(value=48)
+        self.wf_thickness = tk.IntVar(value=3)
+        self.wf_use_gradient = tk.BooleanVar(value=False)
+        self.wf_color = "#FFFFFF"
+        self.wf_gradient_color = "#00BFFF"
+
         self._queue: queue.Queue = queue.Queue()
         self._running = False
         self._cancel_event = threading.Event()
@@ -215,6 +231,17 @@ class AudiogrammerApp:
 
         wm.columnconfigure(1, weight=1)
 
+        # ---- Waveform settings launcher ----------------------------------
+        wf_row = ttk.Frame(root_frame)
+        wf_row.pack(fill=tk.X, pady=(0, 4))
+        self._wf_btn = ttk.Button(
+            wf_row, text="Waveform Settings…", command=self._open_waveform_settings
+        )
+        self._wf_btn.pack(side=tk.LEFT)
+        self._wf_status_label = ttk.Label(wf_row, text="(off)", foreground="#888888")
+        self._wf_status_label.pack(side=tk.LEFT, padx=(8, 0))
+        self.wf_enabled.trace_add("write", self._update_wf_status)
+
         # ---- Generate / Cancel buttons -----------------------------------
         btn_row = ttk.Frame(root_frame)
         btn_row.pack(pady=(4, 6))
@@ -359,6 +386,17 @@ class AudiogrammerApp:
         _, suggested_font = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
         self.font_size.set(suggested_font)
 
+    def _open_waveform_settings(self) -> None:
+        from gui.waveform_settings import WaveformSettingsDialog
+        WaveformSettingsDialog(self.root, self)
+
+    def _update_wf_status(self, *_) -> None:
+        on = self.wf_enabled.get()
+        self._wf_status_label.config(
+            text="(on)" if on else "(off)",
+            foreground="#2e7d32" if on else "#888888",
+        )
+
     # ------------------------------------------------------------------
     # Generation
     # ------------------------------------------------------------------
@@ -396,6 +434,38 @@ class AudiogrammerApp:
         self._cancel_event.set()
         self._cancel_btn.config(state=tk.DISABLED)
         self._status_var.set("Cancelling…")
+
+    def _build_waveform_config(self):
+        from core.waveform import WaveformConfig
+
+        style_map = {"Line": "line", "Rounded Bars": "bars", "Circular": "circular"}
+        mode_map = {"Reactive": "reactive", "Progress": "progress"}
+
+        placement = "tile" if self.wf_placement.get() == "Tile" else "stretch"
+        pos = self.wf_position.get().strip().lower()
+        if placement == "tile":
+            region = "bottom"
+            cell = pos.replace(" ", "-")          # "Top Right" -> "top-right"
+        else:
+            region = pos                          # "Top" / "Middle" / "Bottom"
+            cell = "middle-center"
+
+        return WaveformConfig(
+            enabled=self.wf_enabled.get(),
+            mode=mode_map.get(self.wf_mode.get(), "reactive"),
+            style=style_map.get(self.wf_style.get(), "bars"),
+            color=_hex_to_rgb(self.wf_color),
+            gradient_color=_hex_to_rgb(self.wf_gradient_color) if self.wf_use_gradient.get() else None,
+            opacity=self.wf_opacity.get() / 100.0,
+            placement_mode=placement,
+            region=region,
+            cell=cell,
+            sensitivity=float(self.wf_sensitivity.get()),
+            smoothing=float(self.wf_smoothing.get()),
+            mirror=self.wf_mirror.get(),
+            bar_count=int(self.wf_bar_count.get()),
+            thickness=int(self.wf_thickness.get()),
+        )
 
     def _worker(self, bg_path: str, audio_path: str, output_path: str) -> None:
         try:
@@ -447,6 +517,8 @@ class AudiogrammerApp:
                 color=_hex_to_rgb(self.wm_color),
             )
 
+            wf_cfg = self._build_waveform_config()
+
             compose_video(
                 bg_path=bg_path,
                 audio_path=audio_path,
@@ -460,6 +532,7 @@ class AudiogrammerApp:
                 crf=crf,
                 preset=preset,
                 watermark_config=wm_cfg,
+                waveform_config=wf_cfg,
                 font_path=font_path,
                 cancel_event=self._cancel_event,
                 status_callback=status,
