@@ -30,7 +30,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("620x760")
+        self.root.geometry("620x860")
         self.root.resizable(True, True)
 
         try:
@@ -188,6 +188,17 @@ class AudiogrammerApp:
         )
         self._highlight_btn.grid(row=9, column=1, sticky=tk.W, pady=4)
 
+        # ---- Waveform settings launcher ----------------------------------
+        wf_row = ttk.Frame(root_frame)
+        wf_row.pack(fill=tk.X, pady=(0, 4))
+        self._wf_btn = ttk.Button(
+            wf_row, text="Waveform Settings…", command=self._open_waveform_settings
+        )
+        self._wf_btn.pack(side=tk.LEFT)
+        self._wf_status_label = ttk.Label(wf_row, text="(off)", foreground="#888888")
+        self._wf_status_label.pack(side=tk.LEFT, padx=(8, 0))
+        self.wf_enabled.trace_add("write", self._update_wf_status)
+
         # ---- Output ------------------------------------------------------
         output = ttk.LabelFrame(root_frame, text="Output", padding=8)
         output.pack(fill=tk.X, pady=(0, 8))
@@ -230,17 +241,6 @@ class AudiogrammerApp:
         self.wm_opacity.trace_add("write", self._update_opacity_label)
 
         wm.columnconfigure(1, weight=1)
-
-        # ---- Waveform settings launcher ----------------------------------
-        wf_row = ttk.Frame(root_frame)
-        wf_row.pack(fill=tk.X, pady=(0, 4))
-        self._wf_btn = ttk.Button(
-            wf_row, text="Waveform Settings…", command=self._open_waveform_settings
-        )
-        self._wf_btn.pack(side=tk.LEFT)
-        self._wf_status_label = ttk.Label(wf_row, text="(off)", foreground="#888888")
-        self._wf_status_label.pack(side=tk.LEFT, padx=(8, 0))
-        self.wf_enabled.trace_add("write", self._update_wf_status)
 
         # ---- Generate / Cancel buttons -----------------------------------
         btn_row = ttk.Frame(root_frame)
