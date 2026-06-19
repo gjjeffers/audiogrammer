@@ -29,7 +29,8 @@ def main() -> None:
 
     root = tk.Tk()
     from gui.app import AudiogrammerApp
-    app = AudiogrammerApp(root)  # noqa: F841
+    app = AudiogrammerApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()
 
 
