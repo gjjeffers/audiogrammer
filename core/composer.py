@@ -187,7 +187,7 @@ def compose_video(
     if wf_active:
         if status_callback:
             status_callback("Analyzing audio waveform…")
-        wf_data = analyze_audio(audio, fps, total_frames, waveform_config)
+        wf_data = analyze_audio(audio, fps, total_frames, waveform_config, cancel_event)
         wf_region = compute_region(first_frame.size, waveform_config)
 
     def make_frame(t: float) -> np.ndarray:

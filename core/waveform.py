@@ -47,11 +47,15 @@ def _normalize(arr: np.ndarray, sensitivity: float) -> np.ndarray:
     return np.clip(out, 0.0, 1.0)
 
 
-def analyze_audio(audio, fps: int, total_frames: int, config: WaveformConfig) -> np.ndarray:
+def analyze_audio(audio, fps: int, total_frames: int, config: WaveformConfig,
+                  cancel_event=None) -> np.ndarray:
     """Precompute per-render visualization data.
 
     reactive -> shape (total_frames, bar_count) levels in 0..1
     progress -> shape (bar_count,) static envelope in 0..1
+
+    ``cancel_event`` (a threading.Event) is polled during the reactive
+    per-frame loop so a long analysis can be interrupted promptly.
     """
     mono = _to_mono(audio, _ANALYSIS_SR)
     n = mono.size
@@ -81,6 +85,8 @@ def analyze_audio(audio, fps: int, total_frames: int, config: WaveformConfig) ->
     levels = np.zeros((total_frames, bars), dtype=np.float64)
 
     for f in range(total_frames):
+        if cancel_event is not None and (f & 63) == 0 and cancel_event.is_set():
+            raise InterruptedError
         center = int((f / fps) * _ANALYSIS_SR)
         start = center - half
         seg = np.zeros(win, dtype=np.float64)
@@ -197,20 +203,21 @@ def draw_waveform(
     elif config.style == "line":
         mid = y0 + rh / 2
         amp = (rh / 2) * config.height_frac if config.mirror else rh * config.height_frac
+        width = max(1, config.thickness)
         pts = []
         for i in range(n):
             x = x0 + (i / max(1, n - 1)) * rw
             lv = float(levels[i])
-            if config.mirror:
-                y = mid - amp * lv
-            else:
-                y = y1 - amp * lv
+            y = mid - amp * lv if config.mirror else y1 - amp * lv
             pts.append((x, y))
-        if len(pts) >= 2:
-            draw.line(pts, fill=color + (255,), width=max(1, config.thickness), joint="curve")
+        # Draw per-segment so gradient and progress-playhead dimming apply.
+        for i in range(len(pts) - 1):
+            seg_fill = bar_color(float(levels[i]), i / n) + (255,)
+            draw.line([pts[i], pts[i + 1]], fill=seg_fill, width=width, joint="curve")
             if config.mirror:
-                pts2 = [(x, mid + (mid - y)) for x, y in pts]
-                draw.line(pts2, fill=color + (255,), width=max(1, config.thickness), joint="curve")
+                a = (pts[i][0], mid + (mid - pts[i][1]))
+                b = (pts[i + 1][0], mid + (mid - pts[i + 1][1]))
+                draw.line([a, b], fill=seg_fill, width=width, joint="curve")
 
     else:  # bars
         slot = rw / n
