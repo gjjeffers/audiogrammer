@@ -9,6 +9,7 @@ Generate captioned audiogram videos from any audio file. Audiogrammer transcribe
 
 - Word-by-word subtitle highlighting — current word highlighted, past words dimmed
 - Background support: static image, animated GIF, or video (loops to match audio length)
+- Audio trimming — pick an in/out highlight window in a waveform scrubber; only that window is transcribed and rendered
 - Audio waveform overlay — reactive spectrum or progress style, with bars / line / circular looks
 - Aspect ratio presets: 16:9, 9:16 vertical, 1:1 square, or native source size
 - Optional transcript review and edit before rendering
@@ -64,11 +65,12 @@ Basic workflow:
 
 1. **Input Files** — browse for a background file (image, GIF, or video) and an audio file. Picking an audio file auto-suggests an output name next to it.
 2. **Settings** — choose the Whisper model, resolution, quality, font, colors, font size, and FPS.
-3. *(Optional)* **Waveform Settings…** — open the dialog to enable and configure the audio waveform overlay.
-4. **Output** — confirm or change where the `.mp4` is saved.
-5. *(Optional)* **Watermark** — add text and/or an image overlay.
-6. Click **Generate Audiogram** — the progress bar tracks transcription and then the render phase.
-7. *(Optional)* Tick **Review transcript before rendering** to proofread and correct words before the render starts.
+3. *(Optional)* **Trim Audio…** — open the dialog to select a highlight window in the audio; only that window is transcribed and rendered. Leave unset to process the entire file.
+4. *(Optional)* **Waveform Settings…** — open the dialog to enable and configure the audio waveform overlay.
+5. **Output** — confirm or change where the `.mp4` is saved.
+6. *(Optional)* **Watermark** — add text and/or an image overlay.
+7. Click **Generate Audiogram** — the progress bar tracks transcription and then the render phase.
+8. *(Optional)* Tick **Review transcript before rendering** to proofread and correct words before the render starts.
 
 Your settings (including file paths and waveform options) are saved automatically when you close the window and restored the next time you open the app. Use **Restore Defaults** to reset everything.
 
@@ -95,6 +97,19 @@ Your settings (including file paths and waveform options) are saved automaticall
 | **Video FPS** | Output frame rate (12–60). Higher is smoother but slower to render and larger on disk. |
 | **Text Color** | Color of words that have not yet been spoken. |
 | **Highlight Color** | Color of the word currently being spoken. |
+
+### Trim Audio
+
+Open the **Trim Audio…** dialog to select a highlight window instead of rendering the whole file. The status next to the button shows `(full)` or the chosen range.
+
+| Control | Meaning |
+|---|---|
+| **Overview waveform** | The full file. Drag the two handles to set the coarse in/out points; the area outside the selection is dimmed. |
+| **In / Out detail strips** | A zoomed view around each handle (±3s) for fine placement — drag inside a strip to nudge that handle precisely. |
+| **In / Out fields** | Exact `m:ss.s` entry, each with ±0.1s / ±1s nudge buttons. Handles, detail strips, and fields stay in sync. |
+| **Use Full Audio** | Clears the trim and renders the entire file. |
+
+Trimming happens **before** transcription, so picking a 60-second window means Whisper only processes those 60 seconds — dramatically faster than transcribing a full episode. The selection resets when you choose a different audio file.
 
 ### Waveform Settings
 
