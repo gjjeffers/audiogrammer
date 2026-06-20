@@ -7,6 +7,7 @@ from PIL import Image
 
 from core.renderer import render_frame
 from core.transcriber import Segment
+from core.trim import apply_trim
 from core.watermark import WatermarkConfig, build_watermark
 from core.waveform import WaveformConfig, analyze_audio, compute_region, draw_waveform
 
@@ -160,6 +161,8 @@ def compose_video(
     cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
+    trim_start: Optional[float] = None,
+    trim_end: Optional[float] = None,
 ) -> None:
     try:
         from moviepy import AudioFileClip, VideoClip
@@ -176,6 +179,7 @@ def compose_video(
         status_callback("Loading audio...")
 
     audio = AudioFileClip(audio_path)
+    audio = apply_trim(audio, trim_start, trim_end)
     duration = audio.duration
     total_frames = max(1, int(duration * fps))
     rendered_count = [0]

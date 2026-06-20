@@ -42,6 +42,10 @@ DEFAULTS = {
     "wf_use_gradient": False,
     "wf_color": "#FFFFFF",
     "wf_gradient_color": "#00BFFF",
+    # Trim
+    "trim_enabled": False,
+    "trim_start": 0.0,
+    "trim_end": 0.0,
 }
 
 

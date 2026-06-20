@@ -81,6 +81,13 @@ class AudiogrammerApp:
         self.wf_color = "#FFFFFF"
         self.wf_gradient_color = "#00BFFF"
 
+        # Trim state (edited via the Trim Audio dialog)
+        self.trim_enabled = tk.BooleanVar(value=False)
+        self.trim_start = tk.DoubleVar(value=0.0)
+        self.trim_end = tk.DoubleVar(value=0.0)
+        self._audio_duration = 0.0
+        self._overview_cache: dict = {}
+
         self._queue: queue.Queue = queue.Queue()
         self._running = False
         self._cancel_event = threading.Event()
@@ -115,6 +122,16 @@ class AudiogrammerApp:
         ttk.Button(files, text="Browse…", command=self._browse_audio).grid(row=1, column=2, pady=4)
 
         files.columnconfigure(1, weight=1)
+
+        # ---- Trim launcher ----------------------------------------------
+        trim_row = ttk.Frame(root_frame)
+        trim_row.pack(fill=tk.X, pady=(0, 4))
+        ttk.Button(trim_row, text="Trim Audio…", command=self._open_trim_dialog).pack(side=tk.LEFT)
+        self._trim_status_label = ttk.Label(trim_row, text="(full)", foreground="#888888")
+        self._trim_status_label.pack(side=tk.LEFT, padx=(8, 0))
+        self.trim_enabled.trace_add("write", self._update_trim_status)
+        self.trim_start.trace_add("write", self._update_trim_status)
+        self.trim_end.trace_add("write", self._update_trim_status)
 
         # ---- Settings ----------------------------------------------------
         settings = ttk.LabelFrame(root_frame, text="Settings", padding=8)
@@ -357,6 +374,9 @@ class AudiogrammerApp:
             "wf_use_gradient": self.wf_use_gradient.get(),
             "wf_color": self.wf_color,
             "wf_gradient_color": self.wf_gradient_color,
+            "trim_enabled": self.trim_enabled.get(),
+            "trim_start": self.trim_start.get(),
+            "trim_end": self.trim_end.get(),
         }
 
     def _apply_settings(self, data: dict) -> None:
@@ -397,6 +417,9 @@ class AudiogrammerApp:
         self.wf_use_gradient.set(data.get("wf_use_gradient", False))
         self.wf_color = data.get("wf_color", "#FFFFFF")
         self.wf_gradient_color = data.get("wf_gradient_color", "#00BFFF")
+        self.trim_enabled.set(data.get("trim_enabled", False))
+        self.trim_start.set(data.get("trim_start", 0.0))
+        self.trim_end.set(data.get("trim_end", 0.0))
 
     def on_close(self) -> None:
         _settings.save(self._collect_settings())
@@ -446,6 +469,10 @@ class AudiogrammerApp:
                 stem = Path(path).stem
                 suggested = str(Path(path).parent / f"{stem}_audiogram.mp4")
                 self.output_path.set(suggested)
+            self.trim_enabled.set(False)
+            self.trim_start.set(0.0)
+            self.trim_end.set(0.0)
+            self._audio_duration = 0.0
 
     def _browse_output(self) -> None:
         path = filedialog.asksaveasfilename(
@@ -502,6 +529,18 @@ class AudiogrammerApp:
             text="(on)" if on else "(off)",
             foreground="#2e7d32" if on else "#888888",
         )
+
+    def _open_trim_dialog(self) -> None:
+        from gui.trim_dialog import TrimDialog
+        TrimDialog(self.root, self)
+
+    def _update_trim_status(self, *_) -> None:
+        from core.trim import format_timecode
+        if self.trim_enabled.get():
+            text = f"({format_timecode(self.trim_start.get())} – {format_timecode(self.trim_end.get())})"
+            self._trim_status_label.config(text=text, foreground="#2e7d32")
+        else:
+            self._trim_status_label.config(text="(full)", foreground="#888888")
 
     # ------------------------------------------------------------------
     # Generation
@@ -584,7 +623,13 @@ class AudiogrammerApp:
             def video_progress(p: float) -> None:
                 self._queue.put(("progress", 50 + p * 50))
 
-            segments = transcribe(audio_path, model_size=self.model_size.get(), status_callback=status)
+            trim_start = self.trim_start.get() if self.trim_enabled.get() else None
+            trim_end = self.trim_end.get() if self.trim_enabled.get() else None
+
+            segments = transcribe(
+                audio_path, model_size=self.model_size.get(),
+                status_callback=status, trim_start=trim_start, trim_end=trim_end,
+            )
 
             # Check for cancel between transcription and rendering
             if self._cancel_event.is_set():
@@ -643,6 +688,8 @@ class AudiogrammerApp:
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,
+                trim_start=trim_start,
+                trim_end=trim_end,
             )
             self._queue.put(("done", output_path))
 
