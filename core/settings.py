@@ -4,13 +4,16 @@ from pathlib import Path
 _SETTINGS_DIR = Path.home() / ".audiogrammer"
 _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
 
+ALL_MODELS = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "turbo"]
+
 DEFAULTS = {
     # File paths
     "audio_path": "",
     "bg_path": "",
     "output_path": "audiogram.mp4",
     # Core video settings
-    "model_size": "base",
+    "model_size": "turbo",
+    "visible_models": ALL_MODELS,
     "font_size": 72,
     "fps": 24,
     "resolution": "1080p 1920×1080 (16:9)",
