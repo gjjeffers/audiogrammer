@@ -4,6 +4,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from core import settings as _settings
+
 # (target_size, suggested_font_size)
 _RESOLUTIONS = {
     "Native (source size)":       (None, 40),
@@ -87,6 +89,9 @@ class AudiogrammerApp:
 
         self._build_ui()
         self._poll()
+        _loaded = _settings.load()
+        self._pending_font_name = _loaded.get("font_name", "")
+        self._apply_settings(_loaded)
         threading.Thread(target=self._load_fonts_async, daemon=True).start()
 
     # ------------------------------------------------------------------
@@ -254,6 +259,10 @@ class AudiogrammerApp:
         )
         self._cancel_btn.pack(side=tk.LEFT)
 
+        ttk.Button(btn_row, text="Restore Defaults", command=self._restore_defaults).pack(
+            side=tk.LEFT, padx=(6, 0)
+        )
+
         # ---- Progress area -----------------------------------------------
         progress_frame = ttk.Frame(root_frame)
         progress_frame.pack(fill=tk.X)
@@ -280,10 +289,14 @@ class AudiogrammerApp:
     def _on_fonts_loaded(self) -> None:
         names = list(self._font_map.keys())
         self._font_cb.config(values=names, state="readonly")
-        default = next((n for n in names if "Liberation Sans" in n and "Bold" in n), None)
-        if default is None:
-            default = next((n for n in names if "Sans" in n and "Bold" in n), names[0] if names else "")
-        self.font_name.set(default)
+        saved = getattr(self, "_pending_font_name", "")
+        if saved and saved in names:
+            self.font_name.set(saved)
+        else:
+            default = next((n for n in names if "Liberation Sans" in n and "Bold" in n), None)
+            if default is None:
+                default = next((n for n in names if "Sans" in n and "Bold" in n), names[0] if names else "")
+            self.font_name.set(default)
         self._update_font_preview()
 
     def _update_font_preview(self, *_) -> None:
@@ -305,6 +318,99 @@ class AudiogrammerApp:
             self._preview_label.config(image=self._preview_photo, text="")
         except Exception:
             self._preview_label.config(image="", text=sample)
+
+    # ------------------------------------------------------------------
+    # Settings persistence
+    # ------------------------------------------------------------------
+
+    def _collect_settings(self) -> dict:
+        return {
+            "audio_path": self.audio_path.get(),
+            "bg_path": self.bg_path.get(),
+            "output_path": self.output_path.get(),
+            "model_size": self.model_size.get(),
+            "font_size": self.font_size.get(),
+            "fps": self.fps.get(),
+            "resolution": self.resolution.get(),
+            "quality": self.quality.get(),
+            "review_transcript": self.review_transcript.get(),
+            "font_name": self.font_name.get(),
+            "text_color": self.text_color,
+            "highlight_color": self.highlight_color,
+            "wm_text": self.wm_text.get(),
+            "wm_image_path": self.wm_image_path.get(),
+            "wm_position": self.wm_position.get(),
+            "wm_opacity": self.wm_opacity.get(),
+            "wm_font_size": self.wm_font_size.get(),
+            "wm_color": self.wm_color,
+            "wf_enabled": self.wf_enabled.get(),
+            "wf_mode": self.wf_mode.get(),
+            "wf_style": self.wf_style.get(),
+            "wf_opacity": self.wf_opacity.get(),
+            "wf_placement": self.wf_placement.get(),
+            "wf_position": self.wf_position.get(),
+            "wf_sensitivity": self.wf_sensitivity.get(),
+            "wf_smoothing": self.wf_smoothing.get(),
+            "wf_mirror": self.wf_mirror.get(),
+            "wf_bar_count": self.wf_bar_count.get(),
+            "wf_thickness": self.wf_thickness.get(),
+            "wf_use_gradient": self.wf_use_gradient.get(),
+            "wf_color": self.wf_color,
+            "wf_gradient_color": self.wf_gradient_color,
+        }
+
+    def _apply_settings(self, data: dict) -> None:
+        self.audio_path.set(data.get("audio_path", ""))
+        self.bg_path.set(data.get("bg_path", ""))
+        self.output_path.set(data.get("output_path", "audiogram.mp4"))
+        self.model_size.set(data.get("model_size", "base"))
+        self.font_size.set(data.get("font_size", 72))
+        self.fps.set(data.get("fps", 24))
+        self.resolution.set(data.get("resolution", "1080p 1920×1080 (16:9)"))
+        self.quality.set(data.get("quality", "High"))
+        self.review_transcript.set(data.get("review_transcript", False))
+        font_name = data.get("font_name", "")
+        if font_name and font_name in self._font_map:
+            self.font_name.set(font_name)
+        self.text_color = data.get("text_color", "#FFFFFF")
+        self._text_color_btn.config(bg=self.text_color)
+        self.highlight_color = data.get("highlight_color", "#FFDC00")
+        self._highlight_btn.config(bg=self.highlight_color)
+        self.wm_text.set(data.get("wm_text", ""))
+        self.wm_image_path.set(data.get("wm_image_path", ""))
+        self.wm_position.set(data.get("wm_position", "Bottom Right"))
+        self.wm_opacity.set(data.get("wm_opacity", 70.0))
+        self.wm_font_size.set(data.get("wm_font_size", 28))
+        self.wm_color = data.get("wm_color", "#FFFFFF")
+        self._wm_color_btn.config(bg=self.wm_color)
+        self.wf_enabled.set(data.get("wf_enabled", False))
+        self.wf_mode.set(data.get("wf_mode", "Reactive"))
+        self.wf_style.set(data.get("wf_style", "Rounded Bars"))
+        self.wf_opacity.set(data.get("wf_opacity", 90.0))
+        self.wf_placement.set(data.get("wf_placement", "Stretch"))
+        self.wf_position.set(data.get("wf_position", "Bottom"))
+        self.wf_sensitivity.set(data.get("wf_sensitivity", 1.0))
+        self.wf_smoothing.set(data.get("wf_smoothing", 0.5))
+        self.wf_mirror.set(data.get("wf_mirror", False))
+        self.wf_bar_count.set(data.get("wf_bar_count", 48))
+        self.wf_thickness.set(data.get("wf_thickness", 3))
+        self.wf_use_gradient.set(data.get("wf_use_gradient", False))
+        self.wf_color = data.get("wf_color", "#FFFFFF")
+        self.wf_gradient_color = data.get("wf_gradient_color", "#00BFFF")
+
+    def on_close(self) -> None:
+        _settings.save(self._collect_settings())
+        self.root.destroy()
+
+    def _restore_defaults(self) -> None:
+        self._apply_settings(_settings.DEFAULTS)
+        if self._font_map:
+            names = list(self._font_map.keys())
+            default = next((n for n in names if "Liberation Sans" in n and "Bold" in n), None)
+            if default is None:
+                default = next((n for n in names if "Sans" in n and "Bold" in n), names[0] if names else "")
+            self.font_name.set(default)
+            self._update_font_preview()
 
     # ------------------------------------------------------------------
     # Browse helpers
