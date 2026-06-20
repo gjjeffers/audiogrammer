@@ -27,6 +27,7 @@ class TrimDialog(tk.Toplevel):
         self._envelope = None          # np.ndarray 0..1 or None until analyzed
         self._duration = 0.0
         self._drag_handle = None       # "start" | "end" | None
+        self._detail_anchor = None
 
         self._build_ui()
         self._traces = [
@@ -61,8 +62,12 @@ class TrimDialog(tk.Toplevel):
         self._detail_out = tk.Canvas(frm, width=_DETAIL_W, height=_DETAIL_H,
                                      bg="#1e1e1e", highlightthickness=0)
         self._detail_out.grid(row=3, column=2, columnspan=2, pady=(0, 8))
+        self._detail_in.bind("<Button-1>", lambda e: self._on_detail_press("start", e))
         self._detail_in.bind("<B1-Motion>", lambda e: self._on_detail_drag("start", e))
+        self._detail_in.bind("<ButtonRelease-1>", lambda e: setattr(self, "_detail_anchor", None))
+        self._detail_out.bind("<Button-1>", lambda e: self._on_detail_press("end", e))
         self._detail_out.bind("<B1-Motion>", lambda e: self._on_detail_drag("end", e))
+        self._detail_out.bind("<ButtonRelease-1>", lambda e: setattr(self, "_detail_anchor", None))
 
         # Numeric fields + nudges
         self._in_var = tk.StringVar()
@@ -109,12 +114,13 @@ class TrimDialog(tk.Toplevel):
             except Exception as exc:  # pragma: no cover - I/O failure path
                 self.after(0, lambda: self._status.config(text=f"Could not read audio: {exc}"))
                 return
-            self.app._overview_cache[path] = (env, dur)
-            self.after(0, lambda: self._on_overview_ready(env, dur))
+            self.after(0, lambda: self._on_overview_ready(env, dur, path))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_overview_ready(self, env, dur) -> None:
+    def _on_overview_ready(self, env, dur, path=None) -> None:
+        if path is not None:
+            self.app._overview_cache[path] = (env, dur)
         self._envelope = env
         self._duration = dur
         self.app._audio_duration = dur
@@ -174,8 +180,16 @@ class TrimDialog(tk.Toplevel):
         else:
             self._set_range(self.app.trim_start.get(), t)
 
+    def _on_detail_press(self, which, event) -> None:
+        self._detail_anchor = (
+            self.app.trim_start.get() if which == "start" else self.app.trim_end.get()
+        )
+        self._on_detail_drag(which, event)
+
     def _on_detail_drag(self, which, event) -> None:
-        anchor = self.app.trim_start.get() if which == "start" else self.app.trim_end.get()
+        anchor = self._detail_anchor
+        if anchor is None:
+            anchor = self.app.trim_start.get() if which == "start" else self.app.trim_end.get()
         lo = anchor - _DETAIL_WINDOW
         frac = max(0.0, min(1.0, event.x / _DETAIL_W))
         t = lo + frac * (2 * _DETAIL_WINDOW)
