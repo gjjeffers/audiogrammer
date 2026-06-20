@@ -112,7 +112,8 @@ class TrimDialog(tk.Toplevel):
             try:
                 env, dur = load_audio_overview(path, _BUCKETS)
             except Exception as exc:  # pragma: no cover - I/O failure path
-                self.after(0, lambda: self._status.config(text=f"Could not read audio: {exc}"))
+                error_text = f"Could not read audio: {exc}"
+                self.after(0, lambda: self._status.config(text=error_text))
                 return
             self.after(0, lambda: self._on_overview_ready(env, dur, path))
 
