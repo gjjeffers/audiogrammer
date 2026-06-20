@@ -150,12 +150,13 @@ class AudiogrammerApp:
         model_cb = ttk.Combobox(
             settings,
             textvariable=self.model_size,
-            values=["tiny", "base", "small", "medium", "large"],
+            values=_settings.ALL_MODELS,
             width=14,
             state="readonly",
         )
         model_cb.grid(row=0, column=1, sticky=tk.W, pady=4)
-        ttk.Label(settings, text="  (larger = more accurate, slower)").grid(row=0, column=2, sticky=tk.W)
+        self._model_cb = model_cb
+        ttk.Label(settings, text="  (larger = more accurate, slower; turbo ≈ large-v3 speed/quality)").grid(row=0, column=2, sticky=tk.W)
 
         ttk.Checkbutton(
             settings,
@@ -355,6 +356,7 @@ class AudiogrammerApp:
             "bg_path": self.bg_path.get(),
             "output_path": self.output_path.get(),
             "model_size": self.model_size.get(),
+            "visible_models": list(self._model_cb["values"]),
             "font_size": self.font_size.get(),
             "fps": self.fps.get(),
             "resolution": self.resolution.get(),
@@ -392,7 +394,12 @@ class AudiogrammerApp:
         self.audio_path.set(data.get("audio_path", ""))
         self.bg_path.set(data.get("bg_path", ""))
         self.output_path.set(data.get("output_path", "audiogram.mp4"))
-        self.model_size.set(data.get("model_size", "base"))
+        visible = data.get("visible_models", _settings.ALL_MODELS)
+        self._model_cb["values"] = visible
+        current = data.get("model_size", "turbo")
+        if current not in visible:
+            current = visible[0] if visible else "turbo"
+        self.model_size.set(current)
         self.font_size.set(data.get("font_size", 72))
         self.fps.set(data.get("fps", 24))
         self.resolution.set(data.get("resolution", "1080p 1920×1080 (16:9)"))

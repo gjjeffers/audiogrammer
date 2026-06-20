@@ -87,7 +87,7 @@ Your settings (including file paths and waveform options) are saved automaticall
 
 | Setting | Meaning |
 |---|---|
-| **Whisper Model** | Transcription model. Larger models are more accurate but slower (see the model guide below). |
+| **Whisper Model** | Transcription model. Larger models are more accurate but slower; `turbo` offers large-v3 quality at ~8× the speed (see the model guide below). |
 | **Review transcript before rendering** | When checked, pauses after transcription and opens an editor so you can fix mis-heard words before the render starts. |
 | **Resolution** | Output frame size. Choosing a preset also auto-suggests a matching font size. `Native (source size)` keeps the background's own dimensions. |
 | **Quality** | Encoder trade-off between file size/speed and visual quality: `Fast` = CRF 28 / veryfast preset, `Balanced` = CRF 23 / medium, `High` = CRF 18 / slow. Lower CRF = higher quality, larger file. |
@@ -170,13 +170,18 @@ Open via the **Waveform Settings…** button. The status next to the button show
 
 Models are downloaded automatically on first use.
 
-| Model | Approx. size | Speed | Notes |
+| Model | Approx. size | Speed factor | Notes |
 |---|---|---|---|
-| `tiny` | ~75 MB | Fastest | Good for quick tests |
-| `base` | ~145 MB | Fast | Reasonable accuracy (default) |
-| `small` | ~465 MB | Moderate | Good balance |
-| `medium` | ~1.5 GB | Slow | High accuracy |
-| `large` | ~3 GB | Slowest | Best accuracy |
+| `tiny` | ~75 MB | ~32× | Fastest; good for quick tests |
+| `base` | ~145 MB | ~16× | Good speed/accuracy trade-off |
+| `small` | ~465 MB | ~6× | Better accuracy |
+| `medium` | ~1.5 GB | ~2× | High accuracy |
+| `large` | ~3 GB | 1× | Original large; superseded by v3 |
+| `large-v2` | ~3 GB | ~1× | Improved large |
+| `large-v3` | ~3 GB | ~1× | Best accuracy |
+| `turbo` | ~1.5 GB | ~8× | Optimized large-v3; best balance (default) |
+
+Speed factor is relative to `large` (1×).
 
 
 ## Settings Persistence
