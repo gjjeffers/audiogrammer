@@ -32,7 +32,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("620x860")
+        self.root.geometry("960x720")
         self.root.resizable(True, True)
 
         try:
@@ -109,8 +109,17 @@ class AudiogrammerApp:
         root_frame = ttk.Frame(self.root, padding=14)
         root_frame.pack(fill=tk.BOTH, expand=True)
 
+        columns_frame = ttk.Frame(root_frame)
+        columns_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+
+        left_col = ttk.Frame(columns_frame)
+        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+
+        right_col = ttk.Frame(columns_frame)
+        right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
         # ---- Input files -------------------------------------------------
-        files = ttk.LabelFrame(root_frame, text="Input Files", padding=8)
+        files = ttk.LabelFrame(left_col, text="Input Files", padding=8)
         files.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(files, text="Background:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
@@ -124,7 +133,7 @@ class AudiogrammerApp:
         files.columnconfigure(1, weight=1)
 
         # ---- Trim launcher ----------------------------------------------
-        trim_row = ttk.Frame(root_frame)
+        trim_row = ttk.Frame(left_col)
         trim_row.pack(fill=tk.X, pady=(0, 4))
         ttk.Button(trim_row, text="Trim Audio…", command=self._open_trim_dialog).pack(side=tk.LEFT)
         self._trim_status_label = ttk.Label(trim_row, text="(full)", foreground="#888888")
@@ -134,7 +143,7 @@ class AudiogrammerApp:
         self.trim_end.trace_add("write", self._update_trim_status)
 
         # ---- Settings ----------------------------------------------------
-        settings = ttk.LabelFrame(root_frame, text="Settings", padding=8)
+        settings = ttk.LabelFrame(left_col, text="Settings", padding=8)
         settings.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(settings, text="Whisper Model:").grid(row=0, column=0, sticky=tk.W, pady=4, padx=(0, 8))
@@ -211,7 +220,7 @@ class AudiogrammerApp:
         self._highlight_btn.grid(row=9, column=1, sticky=tk.W, pady=4)
 
         # ---- Waveform settings launcher ----------------------------------
-        wf_row = ttk.Frame(root_frame)
+        wf_row = ttk.Frame(left_col)
         wf_row.pack(fill=tk.X, pady=(0, 4))
         self._wf_btn = ttk.Button(
             wf_row, text="Waveform Settings…", command=self._open_waveform_settings
@@ -222,7 +231,7 @@ class AudiogrammerApp:
         self.wf_enabled.trace_add("write", self._update_wf_status)
 
         # ---- Output ------------------------------------------------------
-        output = ttk.LabelFrame(root_frame, text="Output", padding=8)
+        output = ttk.LabelFrame(right_col, text="Output", padding=8)
         output.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(output, text="Save to:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
@@ -231,7 +240,7 @@ class AudiogrammerApp:
         output.columnconfigure(1, weight=1)
 
         # ---- Watermark -------------------------------------------------------
-        wm = ttk.LabelFrame(root_frame, text="Watermark  (leave blank to disable)", padding=8)
+        wm = ttk.LabelFrame(right_col, text="Watermark  (leave blank to disable)", padding=8)
         wm.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(wm, text="Text:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
