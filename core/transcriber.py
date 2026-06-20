@@ -21,8 +21,12 @@ def transcribe(
     audio_path: str,
     model_size: str = "base",
     status_callback: Optional[Callable[[str], None]] = None,
+    trim_start: Optional[float] = None,
+    trim_end: Optional[float] = None,
 ) -> List[Segment]:
     import whisper
+
+    from core.trim import should_trim, slice_audio
 
     if status_callback:
         status_callback(f"Loading Whisper model '{model_size}'...")
@@ -32,7 +36,13 @@ def transcribe(
     if status_callback:
         status_callback("Transcribing audio (this may take a moment)...")
 
-    result = model.transcribe(audio_path, word_timestamps=True)
+    if should_trim(trim_start, trim_end):
+        sr = whisper.audio.SAMPLE_RATE
+        samples = whisper.load_audio(audio_path)
+        samples = slice_audio(samples, sr, trim_start, trim_end)
+        result = model.transcribe(samples, word_timestamps=True)
+    else:
+        result = model.transcribe(audio_path, word_timestamps=True)
 
     segments: List[Segment] = []
     for seg_data in result["segments"]:
