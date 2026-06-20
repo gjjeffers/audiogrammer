@@ -2,8 +2,7 @@
 
 Generate captioned audiogram videos from any audio file. Audiogrammer transcribes your audio with [OpenAI Whisper](https://github.com/openai/whisper), then renders an MP4 with animated word-by-word subtitle highlighting over your chosen background — with an optional reactive audio waveform overlay.
 
-<img width="619" height="877" alt="image" src="https://github.com/user-attachments/assets/7986462b-1e6e-434b-b9ba-8d1b87c5dd3c" />
-
+<img width="630" height="898" alt="image" src="https://github.com/user-attachments/assets/50b90e35-af48-47a5-9810-addd7145c78d" />
 
 ## Features
 
