@@ -47,6 +47,41 @@ def _normalize(arr: np.ndarray, sensitivity: float) -> np.ndarray:
     return np.clip(out, 0.0, 1.0)
 
 
+def compute_overview(mono: np.ndarray, buckets: int) -> np.ndarray:
+    """Peak-envelope of a mono signal across ``buckets`` buckets, normalized to 0..1."""
+    mono = np.asarray(mono, dtype=np.float64)
+    buckets = max(1, int(buckets))
+    n = mono.size
+    if n == 0:
+        return np.zeros(buckets, dtype=np.float64)
+    env = np.zeros(buckets, dtype=np.float64)
+    edges = np.linspace(0, n, buckets + 1, dtype=int)
+    absmono = np.abs(mono)
+    for i in range(buckets):
+        a, b = edges[i], edges[i + 1]
+        if b > a:
+            env[i] = absmono[a:b].max()
+    peak = float(env.max())
+    if peak <= 1e-9:
+        return np.zeros(buckets, dtype=np.float64)
+    return env / peak
+
+
+def load_audio_overview(audio_path, buckets: int = 600, _loader=None, _sample_rate: int = 16000):
+    """Decode ``audio_path`` to mono and return (envelope 0..1, duration_seconds).
+
+    ``_loader`` / ``_sample_rate`` are injection seams for tests; in production they
+    resolve to ``whisper.load_audio`` and ``whisper.audio.SAMPLE_RATE``.
+    """
+    if _loader is None:
+        import whisper
+        _loader = whisper.load_audio
+        _sample_rate = whisper.audio.SAMPLE_RATE
+    samples = _loader(audio_path)
+    duration = len(samples) / float(_sample_rate)
+    return compute_overview(samples, buckets), duration
+
+
 def analyze_audio(audio, fps: int, total_frames: int, config: WaveformConfig,
                   cancel_event=None) -> np.ndarray:
     """Precompute per-render visualization data.
@@ -63,14 +98,8 @@ def analyze_audio(audio, fps: int, total_frames: int, config: WaveformConfig,
 
     if config.mode == "progress":
         # Peak envelope across bar_count buckets over the whole track.
-        env = np.zeros(bars, dtype=np.float64)
-        edges = np.linspace(0, n, bars + 1, dtype=int)
-        absmono = np.abs(mono)
-        for i in range(bars):
-            a, b = edges[i], edges[i + 1]
-            if b > a:
-                env[i] = absmono[a:b].max()
-        return _normalize(env, config.sensitivity)
+        env = compute_overview(mono, bars)
+        return np.clip(env * config.sensitivity, 0.0, 1.0)
 
     # ---- reactive: FFT spectrum per frame --------------------------------
     win = 2048
