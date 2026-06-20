@@ -67,7 +67,7 @@ def compute_overview(mono: np.ndarray, buckets: int) -> np.ndarray:
     return env / peak
 
 
-def load_audio_overview(audio_path, buckets: int = 600, _loader=None, _sample_rate: int = 16000):
+def load_audio_overview(audio_path, buckets: int = 600, _loader=None, _sample_rate: int = 16000) -> tuple[np.ndarray, float]:
     """Decode ``audio_path`` to mono and return (envelope 0..1, duration_seconds).
 
     ``_loader`` / ``_sample_rate`` are injection seams for tests; in production they
