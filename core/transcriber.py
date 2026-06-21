@@ -23,7 +23,7 @@ def _clip_to_duration(segments: List[Segment], duration: float) -> List[Segment]
     for seg in segments:
         if seg.start >= duration:
             continue
-        if seg.end <= seg.start:
+        if int(seg.end) <= int(seg.start):
             continue
         clipped_words = [w for w in seg.words if w.start < duration]
         for w in clipped_words:
