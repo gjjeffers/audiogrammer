@@ -32,7 +32,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("960x720")
+        self.root.geometry("1100x720")
         self.root.resizable(True, True)
 
         try:
