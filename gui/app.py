@@ -32,7 +32,7 @@ class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Audiogrammer")
-        self.root.geometry("960x720")
+        self.root.geometry("1100x720")
         self.root.resizable(True, True)
 
         try:
@@ -50,7 +50,6 @@ class AudiogrammerApp:
         self.fps = tk.IntVar(value=24)
         self.resolution = tk.StringVar(value="1080p 1920×1080 (16:9)")
         self.quality = tk.StringVar(value="High")
-        self.review_transcript = tk.BooleanVar(value=False)
         self.font_name = tk.StringVar(value="")
         self._font_map: dict = {}
         self._preview_photo = None
@@ -91,8 +90,12 @@ class AudiogrammerApp:
         self._queue: queue.Queue = queue.Queue()
         self._running = False
         self._cancel_event = threading.Event()
-        self._transcript_ready = threading.Event()
-        self._edited_segments = None
+        # Stored transcript produced by "Transcribe & Review" (or a silent
+        # transcription during render). _transcript_sig captures the inputs it
+        # was produced from so render can detect staleness and re-transcribe.
+        self._stored_segments = None
+        self._transcript_sig = None
+        self._pending_original = None  # raw segments while the review dialog is open
 
         self._build_ui()
         self._poll()
@@ -157,12 +160,6 @@ class AudiogrammerApp:
         model_cb.grid(row=0, column=1, sticky=tk.W, pady=4)
         self._model_cb = model_cb
         ttk.Label(settings, text="  (larger = more accurate, slower; turbo ≈ large-v3 speed/quality)").grid(row=0, column=2, sticky=tk.W)
-
-        ttk.Checkbutton(
-            settings,
-            text="Review transcript before rendering",
-            variable=self.review_transcript,
-        ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=4)
 
         ttk.Label(settings, text="Resolution:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         res_cb = ttk.Combobox(
@@ -278,6 +275,11 @@ class AudiogrammerApp:
         btn_row = ttk.Frame(root_frame)
         btn_row.pack(pady=(4, 6))
 
+        self._transcribe_btn = ttk.Button(
+            btn_row, text="Transcribe & Review", command=self._transcribe_and_review
+        )
+        self._transcribe_btn.pack(side=tk.LEFT, padx=(0, 6))
+
         self._gen_btn = ttk.Button(btn_row, text="Generate Audiogram", command=self._generate)
         self._gen_btn.pack(side=tk.LEFT, padx=(0, 6))
 
@@ -361,7 +363,6 @@ class AudiogrammerApp:
             "fps": self.fps.get(),
             "resolution": self.resolution.get(),
             "quality": self.quality.get(),
-            "review_transcript": self.review_transcript.get(),
             "font_name": self.font_name.get(),
             "text_color": self.text_color,
             "highlight_color": self.highlight_color,
@@ -404,7 +405,6 @@ class AudiogrammerApp:
         self.fps.set(data.get("fps", 24))
         self.resolution.set(data.get("resolution", "1080p 1920×1080 (16:9)"))
         self.quality.set(data.get("quality", "High"))
-        self.review_transcript.set(data.get("review_transcript", False))
         font_name = data.get("font_name", "")
         if font_name and font_name in self._font_map:
             self.font_name.set(font_name)
@@ -562,6 +562,38 @@ class AudiogrammerApp:
     # Generation
     # ------------------------------------------------------------------
 
+    def _current_sig(self):
+        """Signature of the inputs that determine a transcript's contents."""
+        return (
+            self.audio_path.get().strip(),
+            self.trim_enabled.get(),
+            round(self.trim_start.get(), 3),
+            round(self.trim_end.get(), 3),
+            self.model_size.get(),
+        )
+
+    def _start_running(self) -> None:
+        self._running = True
+        self._cancel_event.clear()
+        self._transcribe_btn.config(state=tk.DISABLED)
+        self._gen_btn.config(state=tk.DISABLED)
+        self._cancel_btn.config(state=tk.NORMAL)
+        self._progress_var.set(0)
+        self._progress_bar.config(mode="indeterminate")
+        self._progress_bar.start(12)
+
+    def _transcribe_and_review(self) -> None:
+        if self._running:
+            return
+
+        audio = self.audio_path.get().strip()
+        if not audio:
+            messagebox.showerror("Missing input", "Please select an audio file.")
+            return
+
+        self._start_running()
+        threading.Thread(target=self._transcribe_worker, args=(audio,), daemon=True).start()
+
     def _generate(self) -> None:
         if self._running:
             return
@@ -580,16 +612,18 @@ class AudiogrammerApp:
             messagebox.showerror("Missing output", "Please specify an output file path.")
             return
 
-        self._running = True
-        self._cancel_event.clear()
-        self._transcript_ready.clear()
-        self._gen_btn.config(state=tk.DISABLED)
-        self._cancel_btn.config(state=tk.NORMAL)
-        self._progress_var.set(0)
-        self._progress_bar.config(mode="indeterminate")
-        self._progress_bar.start(12)
+        # Reuse the stored transcript only if it still matches the current
+        # audio/trim/model; otherwise the render worker re-transcribes silently.
+        sig = self._current_sig()
+        if self._stored_segments is not None and self._transcript_sig == sig:
+            segments = self._stored_segments
+        else:
+            segments = None
 
-        threading.Thread(target=self._worker, args=(bg, audio, out), daemon=True).start()
+        self._start_running()
+        threading.Thread(
+            target=self._render_worker, args=(bg, audio, out, segments, sig), daemon=True
+        ).start()
 
     def _cancel(self) -> None:
         self._cancel_event.set()
@@ -628,16 +662,13 @@ class AudiogrammerApp:
             thickness=int(self.wf_thickness.get()),
         )
 
-    def _worker(self, bg_path: str, audio_path: str, output_path: str) -> None:
+    def _transcribe_worker(self, audio_path: str) -> None:
+        """Transcribe only, then hand the segments to the review dialog."""
         try:
-            from core.composer import compose_video
             from core.transcriber import transcribe
 
             def status(msg: str) -> None:
                 self._queue.put(("status", msg))
-
-            def video_progress(p: float) -> None:
-                self._queue.put(("progress", 50 + p * 50))
 
             trim_start = self.trim_start.get() if self.trim_enabled.get() else None
             trim_end = self.trim_end.get() if self.trim_enabled.get() else None
@@ -647,23 +678,44 @@ class AudiogrammerApp:
                 status_callback=status, trim_start=trim_start, trim_end=trim_end,
             )
 
-            # Check for cancel between transcription and rendering
             if self._cancel_event.is_set():
                 raise InterruptedError
 
-            self._queue.put(("switch_determinate", 50))
+            self._queue.put(("show_transcript", segments))
 
-            # Optional transcript review — block until user clicks Render or Cancel
-            if self.review_transcript.get():
-                self._edited_segments = segments
-                self._queue.put(("show_transcript", segments))
-                while True:
-                    if self._cancel_event.wait(timeout=0.05):
-                        raise InterruptedError
-                    if self._transcript_ready.is_set():
-                        break
-                self._transcript_ready.clear()
-                segments = self._edited_segments
+        except InterruptedError:
+            # No render started, so nothing to clean up on disk.
+            self._queue.put(("transcribe_cancelled", None))
+        except Exception as exc:
+            self._queue.put(("error", str(exc)))
+
+    def _render_worker(
+        self, bg_path: str, audio_path: str, output_path: str, segments, sig
+    ) -> None:
+        try:
+            from core.composer import compose_video
+            from core.transcriber import transcribe
+
+            def status(msg: str) -> None:
+                self._queue.put(("status", msg))
+
+            def video_progress(p: float) -> None:
+                self._queue.put(("progress", p * 100))
+
+            trim_start = self.trim_start.get() if self.trim_enabled.get() else None
+            trim_end = self.trim_end.get() if self.trim_enabled.get() else None
+
+            # No usable stored transcript — transcribe silently, then cache it.
+            if segments is None:
+                segments = transcribe(
+                    audio_path, model_size=self.model_size.get(),
+                    status_callback=status, trim_start=trim_start, trim_end=trim_end,
+                )
+                if self._cancel_event.is_set():
+                    raise InterruptedError
+                self._queue.put(("store_transcript", (segments, sig)))
+
+            self._queue.put(("switch_determinate", 0))
 
             from core.watermark import WatermarkConfig
             target_size, _ = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
@@ -714,9 +766,23 @@ class AudiogrammerApp:
         except Exception as exc:
             self._queue.put(("error", str(exc)))
 
-    def _on_transcript_render(self, edited_segments) -> None:
-        self._edited_segments = edited_segments
-        self._transcript_ready.set()
+    def _on_transcript_update(self, edited_segments) -> None:
+        """Review dialog 'Update Transcript' — keep the user's edits."""
+        self._stored_segments = edited_segments
+        self._transcript_sig = self._current_sig()
+        self._status_var.set(
+            "Transcript updated — adjust settings, then Generate Audiogram."
+        )
+        self._reset_controls()
+
+    def _on_transcript_keep_original(self) -> None:
+        """Review dialog 'Cancel' — discard edits, keep the raw Whisper output."""
+        self._stored_segments = self._pending_original
+        self._transcript_sig = self._current_sig()
+        self._status_var.set(
+            "Transcript stored (original) — adjust settings, then Generate Audiogram."
+        )
+        self._reset_controls()
 
     # ------------------------------------------------------------------
     # Queue polling (runs on main thread)
@@ -736,16 +802,25 @@ class AudiogrammerApp:
                     self._progress_var.set(float(value))
                 elif kind == "show_transcript":
                     from gui.transcript_editor import TranscriptEditorDialog
+                    self._pending_original = value
                     TranscriptEditorDialog(
                         self.root, value,
-                        on_render=self._on_transcript_render,
-                        on_cancel=self._cancel,
+                        on_render=self._on_transcript_update,
+                        on_cancel=self._on_transcript_keep_original,
                     )
+                elif kind == "store_transcript":
+                    segs, sig = value
+                    self._stored_segments = segs
+                    self._transcript_sig = sig
                 elif kind == "done":
                     self._progress_var.set(100)
                     self._status_var.set(f"Done! Saved to: {value}")
                     self._reset_controls()
                     messagebox.showinfo("Done", f"Audiogram saved to:\n{value}")
+                elif kind == "transcribe_cancelled":
+                    self._status_var.set("Cancelled")
+                    self._progress_var.set(0)
+                    self._reset_controls()
                 elif kind == "cancelled":
                     self._status_var.set("Cancelled")
                     self._progress_var.set(0)
@@ -768,5 +843,6 @@ class AudiogrammerApp:
         self._running = False
         self._progress_bar.stop()
         self._progress_bar.config(mode="determinate")
+        self._transcribe_btn.config(state=tk.NORMAL)
         self._gen_btn.config(state=tk.NORMAL)
         self._cancel_btn.config(state=tk.DISABLED)

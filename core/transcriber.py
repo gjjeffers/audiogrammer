@@ -17,6 +17,29 @@ class Segment:
     words: List[Word] = field(default_factory=list)
 
 
+def _clip_to_duration(segments: List[Segment], duration: float) -> List[Segment]:
+    """Drop or trim segments/words that extend past the actual audio duration."""
+    result = []
+    for seg in segments:
+        if seg.start >= duration:
+            continue
+        if int(seg.end) <= int(seg.start):
+            continue
+        clipped_words = [w for w in seg.words if w.start < duration]
+        for w in clipped_words:
+            if w.end > duration:
+                w.end = duration
+        if not seg.text.strip() and not clipped_words:
+            continue
+        result.append(Segment(
+            text=seg.text,
+            start=seg.start,
+            end=min(seg.end, duration),
+            words=clipped_words,
+        ))
+    return result
+
+
 def transcribe(
     audio_path: str,
     model_size: str = "base",
@@ -36,13 +59,12 @@ def transcribe(
     if status_callback:
         status_callback("Transcribing audio (this may take a moment)...")
 
+    sr = whisper.audio.SAMPLE_RATE
+    samples = whisper.load_audio(audio_path)
     if should_trim(trim_start, trim_end):
-        sr = whisper.audio.SAMPLE_RATE
-        samples = whisper.load_audio(audio_path)
         samples = slice_audio(samples, sr, trim_start, trim_end)
-        result = model.transcribe(samples, word_timestamps=True)
-    else:
-        result = model.transcribe(audio_path, word_timestamps=True)
+    result = model.transcribe(samples, word_timestamps=True)
+    duration = len(samples) / sr
 
     segments: List[Segment] = []
     for seg_data in result["segments"]:
@@ -70,4 +92,4 @@ def transcribe(
             words=words,
         ))
 
-    return segments
+    return _clip_to_duration(segments, duration)
