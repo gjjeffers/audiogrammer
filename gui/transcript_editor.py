@@ -124,7 +124,7 @@ class TranscriptEditorDialog(tk.Toplevel):
 
         btn_bar = ttk.Frame(self, padding=(12, 4, 12, 10))
         btn_bar.pack(fill=tk.X)
-        ttk.Button(btn_bar, text="Render Video", command=self._do_render).pack(side=tk.RIGHT, padx=(6, 0))
+        ttk.Button(btn_bar, text="Update Transcript", command=self._do_render).pack(side=tk.RIGHT, padx=(6, 0))
         ttk.Button(btn_bar, text="Cancel", command=self._do_cancel).pack(side=tk.RIGHT)
 
     def _populate(self) -> None:

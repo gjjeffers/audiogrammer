@@ -18,7 +18,6 @@ DEFAULTS = {
     "fps": 24,
     "resolution": "1080p 1920×1080 (16:9)",
     "quality": "High",
-    "review_transcript": False,
     "font_name": "",
     # Caption colors
     "text_color": "#FFFFFF",
