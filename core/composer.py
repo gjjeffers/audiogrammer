@@ -170,61 +170,63 @@ def compose_video(
         from moviepy.editor import AudioFileClip, VideoClip  # type: ignore[no-redef]
 
     get_bg_frame, bg_cleanup = _load_background(bg_path, target_size, status_callback)
+    try:
+        # Determine output frame size and pre-build the watermark overlay once
+        first_frame = get_bg_frame(0.0)
+        watermark = build_watermark(watermark_config, first_frame.size) if watermark_config else None
 
-    # Determine output frame size and pre-build the watermark overlay once
-    first_frame = get_bg_frame(0.0)
-    watermark = build_watermark(watermark_config, first_frame.size) if watermark_config else None
-
-    if status_callback:
-        status_callback("Loading audio...")
-
-    audio = AudioFileClip(audio_path)
-    audio = apply_trim(audio, trim_start, trim_end)
-    duration = audio.duration
-    total_frames = max(1, int(duration * fps))
-    rendered_count = [0]
-
-    # Pre-analyze audio for the waveform overlay (once per render).
-    wf_active = waveform_config is not None and waveform_config.enabled
-    wf_data = None
-    wf_region = None
-    if wf_active:
         if status_callback:
-            status_callback("Analyzing audio waveform…")
-        wf_data = analyze_audio(audio, fps, total_frames, waveform_config, cancel_event)
-        wf_region = compute_region(first_frame.size, waveform_config)
+            status_callback("Loading audio...")
 
-    def make_frame(t: float) -> np.ndarray:
-        if cancel_event is not None and cancel_event.is_set():
-            raise InterruptedError
-        bg = get_bg_frame(t)
-        if wf_active:
-            idx = min(int(t * fps), total_frames - 1)
-            bg = draw_waveform(bg, waveform_config, wf_region, wf_data, idx, total_frames)
-        img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark, font_path)
-        rendered_count[0] += 1
-        if progress_callback:
-            progress_callback(min(rendered_count[0] / total_frames, 1.0))
-        return np.array(img.convert("RGB"))
+        audio = AudioFileClip(audio_path)
+        try:
+            audio = apply_trim(audio, trim_start, trim_end)
+            duration = audio.duration
+            total_frames = max(1, int(duration * fps))
+            rendered_count = [0]
 
-    if status_callback:
-        status_callback("Rendering video frames...")
+            # Pre-analyze audio for the waveform overlay (once per render).
+            wf_active = waveform_config is not None and waveform_config.enabled
+            wf_data = None
+            wf_region = None
+            if wf_active:
+                if status_callback:
+                    status_callback("Analyzing audio waveform…")
+                wf_data = analyze_audio(audio, fps, total_frames, waveform_config, cancel_event)
+                wf_region = compute_region(first_frame.size, waveform_config)
 
-    clip = VideoClip(make_frame, duration=duration)
-    clip = clip.with_fps(fps)
-    clip = clip.with_audio(audio)
+            def make_frame(t: float) -> np.ndarray:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise InterruptedError
+                bg = get_bg_frame(t)
+                if wf_active:
+                    idx = min(int(t * fps), total_frames - 1)
+                    bg = draw_waveform(bg, waveform_config, wf_region, wf_data, idx, total_frames)
+                img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark, font_path)
+                rendered_count[0] += 1
+                if progress_callback:
+                    progress_callback(min(rendered_count[0] / total_frames, 1.0))
+                return np.array(img.convert("RGB"))
 
-    if status_callback:
-        status_callback("Encoding video (this may take a while)...")
+            if status_callback:
+                status_callback("Rendering video frames...")
 
-    clip.write_videofile(
-        output_path,
-        fps=fps,
-        codec="libx264",
-        audio_codec="aac",
-        ffmpeg_params=["-crf", str(crf), "-preset", preset],
-        logger=None,
-    )
+            clip = VideoClip(make_frame, duration=duration)
+            clip = clip.with_fps(fps)
+            clip = clip.with_audio(audio)
 
-    audio.close()
-    bg_cleanup()
+            if status_callback:
+                status_callback("Encoding video (this may take a while)...")
+
+            clip.write_videofile(
+                output_path,
+                fps=fps,
+                codec="libx264",
+                audio_codec="aac",
+                ffmpeg_params=["-crf", str(crf), "-preset", preset],
+                logger=None,
+            )
+        finally:
+            audio.close()
+    finally:
+        bg_cleanup()
