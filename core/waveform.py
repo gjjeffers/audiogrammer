@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
+from core.color import dim
+
 
 @dataclass
 class WaveformConfig:
@@ -67,7 +69,9 @@ def compute_overview(mono: np.ndarray, buckets: int) -> np.ndarray:
     return env / peak
 
 
-def load_audio_overview(audio_path, buckets: int = 600, _loader=None, _sample_rate: int = 16000) -> tuple[np.ndarray, float]:
+def load_audio_overview(
+    audio_path, buckets: int = 600, _loader=None, _sample_rate: int = 16000
+) -> tuple[np.ndarray, float]:
     """Decode ``audio_path`` to mono and return (envelope 0..1, duration_seconds).
 
     ``_loader`` / ``_sample_rate`` are injection seams for tests; in production they
@@ -171,10 +175,6 @@ def _lerp_color(c0: Tuple[int, int, int], c1: Tuple[int, int, int], f: float) ->
     return tuple(int(c0[i] + (c1[i] - c0[i]) * f) for i in range(3))  # type: ignore[return-value]
 
 
-def _dim(color: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
-    return tuple(max(0, int(c * factor)) for c in color)  # type: ignore[return-value]
-
-
 def draw_waveform(
     bg_rgba: Image.Image,
     config: WaveformConfig,
@@ -207,7 +207,7 @@ def draw_waveform(
     def bar_color(level: float, pos_frac: float) -> Tuple[int, int, int]:
         base = _lerp_color(color, grad, level) if grad is not None else color
         if playhead is not None and pos_frac > playhead:
-            return _dim(base, 0.35)
+            return dim(base, 0.35)
         return base
 
     if config.style == "circular":

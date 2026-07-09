@@ -1,9 +1,9 @@
 import os
-from functools import lru_cache
 from typing import List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+from core.color import dim
 from core.transcriber import Segment, Word
 
 _FONT_CANDIDATES = [
@@ -51,10 +51,6 @@ def _text_width(font: ImageFont.ImageFont, text: str) -> int:
         return int(font.getlength(text))
     except AttributeError:
         return font.getsize(text)[0]  # type: ignore[attr-defined]
-
-
-def _dim(color: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
-    return tuple(max(0, int(c * factor)) for c in color)  # type: ignore[return-value]
 
 
 def _active_segment(segments: List[Segment], t: float) -> Optional[Segment]:
@@ -175,7 +171,7 @@ def render_frame(
         for wi, wt, xo in line:
             x = x_start + xo
             if wi < cur_wi:
-                color = _dim(text_color, 0.55)
+                color = dim(text_color, 0.55)
             elif wi == cur_wi:
                 color = highlight_color
             else:

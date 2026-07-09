@@ -31,11 +31,15 @@ def test_transcribe_slices_audio_window(monkeypatch):
     assert captured["audio"][0] == 2 * 16000
 
 
-def test_transcribe_no_trim_passes_path(monkeypatch):
+def test_transcribe_no_trim_passes_full_audio(monkeypatch):
     captured = {}
     _install_fake_whisper(monkeypatch, captured)
     from core.transcriber import transcribe
 
     transcribe("episode.mp3", model_size="base")
 
-    assert captured["audio"] == "episode.mp3"
+    # No trim window -> the full 10s array is passed through, not the raw path
+    # (audio is always loaded as an array so duration can be derived for
+    # hallucination clipping; see core.transcriber.transcribe).
+    assert len(captured["audio"]) == 10 * 16000
+    assert captured["audio"][0] == 0

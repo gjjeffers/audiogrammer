@@ -25,7 +25,7 @@ _QUALITIES = {
 
 def _hex_to_rgb(hex_color: str) -> tuple:
     h = hex_color.lstrip("#")
-    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
 
 
 class AudiogrammerApp:
@@ -159,7 +159,9 @@ class AudiogrammerApp:
         )
         model_cb.grid(row=0, column=1, sticky=tk.W, pady=4)
         self._model_cb = model_cb
-        ttk.Label(settings, text="  (larger = more accurate, slower; turbo ≈ large-v3 speed/quality)").grid(row=0, column=2, sticky=tk.W)
+        ttk.Label(
+            settings, text="  (larger = more accurate, slower; turbo ≈ large-v3 speed/quality)"
+        ).grid(row=0, column=2, sticky=tk.W)
 
         ttk.Label(settings, text="Resolution:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         res_cb = ttk.Combobox(
@@ -252,8 +254,12 @@ class AudiogrammerApp:
             row=0, column=5, sticky=tk.W, pady=4)
 
         ttk.Label(wm, text="Image:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Entry(wm, textvariable=self.wm_image_path, width=22).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
-        ttk.Button(wm, text="Browse…", command=self._browse_wm_image).grid(row=1, column=2, columnspan=2, sticky=tk.W, pady=4)
+        ttk.Entry(wm, textvariable=self.wm_image_path, width=22).grid(
+            row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4
+        )
+        ttk.Button(wm, text="Browse…", command=self._browse_wm_image).grid(
+            row=1, column=2, columnspan=2, sticky=tk.W, pady=4
+        )
 
         ttk.Label(wm, text="Position:").grid(row=2, column=0, sticky=tk.W, padx=(0, 6), pady=4)
         ttk.Combobox(
