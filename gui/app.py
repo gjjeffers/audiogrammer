@@ -5,6 +5,8 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from core import settings as _settings
+from core.fonts import FONT_DEFAULT_WEIGHT, FONT_WEIGHTS
+from core.transitions import TRANSITION_STYLES
 
 # (target_size, suggested_font_size)
 _RESOLUTIONS = {
@@ -51,10 +53,16 @@ class AudiogrammerApp:
         self.resolution = tk.StringVar(value="1080p 1920×1080 (16:9)")
         self.quality = tk.StringVar(value="High")
         self.font_name = tk.StringVar(value="")
+        self.font_weight = tk.StringVar(value=FONT_DEFAULT_WEIGHT)
         self._font_map: dict = {}
         self._preview_photo = None
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
+
+        # Caption transition state
+        self.text_in = tk.StringVar(value="None")
+        self.text_out = tk.StringVar(value="None")
+        self.text_transition_duration = tk.DoubleVar(value=0.3)
 
         # Watermark state
         self.wm_text = tk.StringVar()
@@ -200,24 +208,32 @@ class AudiogrammerApp:
             row=6, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Video FPS:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Font Weight:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Combobox(
+            settings, textvariable=self.font_weight,
+            values=list(FONT_WEIGHTS.keys()), width=14, state="readonly",
+        ).grid(row=7, column=1, sticky=tk.W, pady=4)
+        ttk.Label(settings, text="  (thickness of the caption letters)").grid(row=7, column=2, sticky=tk.W)
+        self.font_weight.trace_add("write", self._update_font_preview)
+
+        ttk.Label(settings, text="Video FPS:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
-            row=7, column=1, sticky=tk.W, pady=4
+            row=8, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Text Color:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Text Color:").grid(row=9, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._text_color_btn = tk.Button(
             settings, bg=self.text_color, width=5, relief=tk.GROOVE,
             command=self._pick_text_color,
         )
-        self._text_color_btn.grid(row=8, column=1, sticky=tk.W, pady=4)
+        self._text_color_btn.grid(row=9, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Highlight Color:").grid(row=9, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Highlight Color:").grid(row=10, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._highlight_btn = tk.Button(
             settings, bg=self.highlight_color, width=5, relief=tk.GROOVE,
             command=self._pick_highlight_color,
         )
-        self._highlight_btn.grid(row=9, column=1, sticky=tk.W, pady=4)
+        self._highlight_btn.grid(row=10, column=1, sticky=tk.W, pady=4)
 
         # ---- Waveform settings launcher ----------------------------------
         wf_row = ttk.Frame(left_col)
@@ -276,6 +292,29 @@ class AudiogrammerApp:
         self.wm_opacity.trace_add("write", self._update_opacity_label)
 
         wm.columnconfigure(1, weight=1)
+
+        # ---- Text transitions --------------------------------------------
+        tr = ttk.LabelFrame(right_col, text="Text Transitions", padding=8)
+        tr.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(tr, text="In:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Combobox(
+            tr, textvariable=self.text_in, values=list(TRANSITION_STYLES.keys()),
+            width=10, state="readonly",
+        ).grid(row=0, column=1, sticky=tk.W, pady=4)
+
+        ttk.Label(tr, text="Out:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Combobox(
+            tr, textvariable=self.text_out, values=list(TRANSITION_STYLES.keys()),
+            width=10, state="readonly",
+        ).grid(row=1, column=1, sticky=tk.W, pady=4)
+
+        ttk.Label(tr, text="Duration:").grid(row=2, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Spinbox(
+            tr, textvariable=self.text_transition_duration,
+            from_=0.05, to=2.0, increment=0.05, width=6, format="%.2f",
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+        ttk.Label(tr, text="sec").grid(row=2, column=2, sticky=tk.W, padx=(4, 0))
 
         # ---- Generate / Cancel buttons -----------------------------------
         btn_row = ttk.Frame(root_frame)
@@ -341,14 +380,18 @@ class AudiogrammerApp:
             return
         sample = "AaBbCcDd 1234"
         try:
-            from PIL import Image, ImageDraw, ImageFont, ImageTk
-            font = ImageFont.truetype(path, 20)
+            from PIL import Image, ImageDraw, ImageTk
+            from core.fonts import load_weighted_font
+            font, stroke = load_weighted_font(path, 20, FONT_WEIGHTS.get(self.font_weight.get()))
             dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-            bbox = dummy.textbbox((0, 0), sample, font=font)
+            bbox = dummy.textbbox((0, 0), sample, font=font, stroke_width=stroke)
             w = bbox[2] - bbox[0] + 20
             h = bbox[3] - bbox[1] + 10
             img = Image.new("RGB", (max(w, 1), max(h, 1)), (255, 255, 255))
-            ImageDraw.Draw(img).text((10, 5), sample, font=font, fill=(30, 30, 30))
+            ImageDraw.Draw(img).text(
+                (10, 5), sample, font=font, fill=(30, 30, 30),
+                stroke_width=stroke, stroke_fill=(30, 30, 30),
+            )
             self._preview_photo = ImageTk.PhotoImage(img)
             self._preview_label.config(image=self._preview_photo, text="")
         except Exception:
@@ -370,6 +413,10 @@ class AudiogrammerApp:
             "resolution": self.resolution.get(),
             "quality": self.quality.get(),
             "font_name": self.font_name.get(),
+            "font_weight": self.font_weight.get(),
+            "text_in": self.text_in.get(),
+            "text_out": self.text_out.get(),
+            "text_transition_duration": self._transition_duration(),
             "text_color": self.text_color,
             "highlight_color": self.highlight_color,
             "wm_text": self.wm_text.get(),
@@ -414,6 +461,13 @@ class AudiogrammerApp:
         font_name = data.get("font_name", "")
         if font_name and font_name in self._font_map:
             self.font_name.set(font_name)
+        font_weight = data.get("font_weight", FONT_DEFAULT_WEIGHT)
+        self.font_weight.set(font_weight if font_weight in FONT_WEIGHTS else FONT_DEFAULT_WEIGHT)
+        text_in = data.get("text_in", "None")
+        self.text_in.set(text_in if text_in in TRANSITION_STYLES else "None")
+        text_out = data.get("text_out", "None")
+        self.text_out.set(text_out if text_out in TRANSITION_STYLES else "None")
+        self.text_transition_duration.set(data.get("text_transition_duration", 0.3))
         self.text_color = data.get("text_color", "#FFFFFF")
         self._text_color_btn.config(bg=self.text_color)
         self.highlight_color = data.get("highlight_color", "#FFDC00")
@@ -636,6 +690,22 @@ class AudiogrammerApp:
         self._cancel_btn.config(state=tk.DISABLED)
         self._status_var.set("Cancelling…")
 
+    def _transition_duration(self) -> float:
+        """Spinbox value, falling back to the default if it isn't a valid number."""
+        try:
+            return min(max(float(self.text_transition_duration.get()), 0.05), 2.0)
+        except (tk.TclError, ValueError):
+            return 0.3
+
+    def _build_text_transition(self):
+        from core.transitions import TextTransition
+
+        return TextTransition(
+            in_style=TRANSITION_STYLES.get(self.text_in.get(), "none"),
+            out_style=TRANSITION_STYLES.get(self.text_out.get(), "none"),
+            duration=self._transition_duration(),
+        )
+
     def _build_waveform_config(self):
         from core.waveform import WaveformConfig
 
@@ -759,6 +829,8 @@ class AudiogrammerApp:
                 watermark_config=wm_cfg,
                 waveform_config=wf_cfg,
                 font_path=font_path,
+                font_weight=FONT_WEIGHTS.get(self.font_weight.get()),
+                text_transition=self._build_text_transition(),
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,

@@ -4,7 +4,9 @@ from typing import List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 from core.color import dim
+from core.fonts import load_weighted_font
 from core.transcriber import Segment, Word
+from core.transitions import TextTransition, composite_caption, transition_state
 
 _FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -46,6 +48,32 @@ def _load_font(size: int, font_path: str = "") -> ImageFont.ImageFont:
     return font
 
 
+_weighted_cache: dict = {}
+
+
+def _load_caption_font(size: int, font_path: str = "", weight: Optional[int] = None):
+    """Return (font, stroke_width) for captions at the requested weight class.
+
+    weight=None is the font's own weight and matches _load_font exactly.
+    """
+    if weight is None:
+        return _load_font(size, font_path), 0
+    key = (size, font_path, weight)
+    if key in _weighted_cache:
+        return _weighted_cache[key]
+    path = font_path if font_path and os.path.exists(font_path) else next(
+        (p for p in _FONT_CANDIDATES if os.path.exists(p)), ""
+    )
+    result = (_load_font(size, font_path), 0)
+    if path:
+        try:
+            result = load_weighted_font(path, size, weight)
+        except Exception:
+            pass
+    _weighted_cache[key] = result
+    return result
+
+
 def _text_width(font: ImageFont.ImageFont, text: str) -> int:
     try:
         return int(font.getlength(text))
@@ -53,18 +81,36 @@ def _text_width(font: ImageFont.ImageFont, text: str) -> int:
         return font.getsize(text)[0]  # type: ignore[attr-defined]
 
 
+# How long a caption stays on screen after its segment ends (unless the next
+# segment starts sooner).
+_LINGER = 0.4
+
+
 def _active_segment(segments: List[Segment], t: float) -> Optional[Segment]:
     """Return the segment active at time t, or the most recently ended one."""
     for seg in segments:
         if seg.start <= t < seg.end:
             return seg
-    # Show segment for up to 0.4s after it ends
+    # Show segment for up to _LINGER seconds after it ends
     for seg in reversed(segments):
-        if seg.start <= t and t < seg.end + 0.4:
+        if seg.start <= t and t < seg.end + _LINGER:
             return seg
         if seg.start <= t:
             break
     return None
+
+
+def _visible_window(segments: List[Segment], seg: Segment) -> Tuple[float, float]:
+    """Return (start, end) of the span during which seg's caption is on screen,
+    mirroring _active_segment: it lingers after seg.end until the next segment
+    begins, for at most _LINGER seconds."""
+    end = seg.end + _LINGER
+    for i, s in enumerate(segments):
+        if s is seg:
+            if i + 1 < len(segments):
+                end = min(end, max(seg.end, segments[i + 1].start))
+            break
+    return seg.start, end
 
 
 def _current_word_idx(words: List[Word], t: float) -> int:
@@ -84,6 +130,8 @@ def render_frame(
     highlight_color: Tuple[int, int, int] = (255, 220, 0),
     watermark: Optional[Image.Image] = None,
     font_path: str = "",
+    font_weight: Optional[int] = None,
+    transition: Optional[TextTransition] = None,
 ) -> Image.Image:
     frame = gif_frame.convert("RGB")
 
@@ -102,9 +150,9 @@ def render_frame(
         return _apply_watermark(frame.convert("RGBA")).convert("RGB")
 
     width, height = frame.size
-    font = _load_font(font_size, font_path)
+    font, stroke = _load_caption_font(font_size, font_path, font_weight)
     space_w = _text_width(font, " ")
-    line_h = int(font_size * 1.45)
+    line_h = int(font_size * 1.45) + 2 * stroke
     h_pad = max(24, int(width * 0.05))
     max_line_w = width - 2 * h_pad
 
@@ -117,7 +165,7 @@ def render_frame(
     for i, word in enumerate(seg.words):
         if not word.text:
             continue
-        w = _text_width(font, word.text)
+        w = _text_width(font, word.text) + 2 * stroke
         if cur_x + w > max_line_w and cur_line:
             lines.append(cur_line)
             cur_line = [(i, word.text, 0)]
@@ -149,33 +197,51 @@ def render_frame(
         lines = lines[start:end]
 
     # ---- Draw -------------------------------------------------------------
+    # The caption (bar + words) is built as its own layer so a transition can
+    # fade, slide or scale it as a unit before it's composited onto the frame.
     v_pad = 14
     text_area_h = len(lines) * line_h + 2 * v_pad
     bar_top = height - text_area_h
 
-    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    ov_draw = ImageDraw.Draw(overlay)
-    ov_draw.rectangle([(0, bar_top), (width, height)], fill=(0, 0, 0, 185))
+    caption = Image.new("RGBA", (width, text_area_h), (0, 0, 0, 185))
 
-    frame_rgba = Image.alpha_composite(frame.convert("RGBA"), overlay)
-    draw = ImageDraw.Draw(frame_rgba)
-
+    # One coverage mask per colour, so antialiased edges blend exactly as if
+    # the words had been drawn straight onto the frame.
+    masks: dict = {}
     for li, line in enumerate(lines):
         if not line:
             continue
         last_wi, last_wt, last_xo = line[-1]
-        line_width = last_xo + _text_width(font, last_wt)
+        line_width = last_xo + _text_width(font, last_wt) + 2 * stroke
         x_start = (width - line_width) // 2
-        y = bar_top + v_pad + li * line_h
+        y = v_pad + li * line_h + stroke
 
         for wi, wt, xo in line:
-            x = x_start + xo
+            x = x_start + xo + stroke
             if wi < cur_wi:
                 color = dim(text_color, 0.55)
             elif wi == cur_wi:
                 color = highlight_color
             else:
                 color = text_color
-            draw.text((x, y), wt, font=font, fill=color)
+            if color not in masks:
+                masks[color] = Image.new("L", caption.size, 0)
+            ImageDraw.Draw(masks[color]).text(
+                (x, y), wt, font=font, fill=255, stroke_width=stroke, stroke_fill=255,
+            )
+
+    for color, mask in masks.items():
+        layer = Image.new("RGBA", caption.size, tuple(color) + (0,))
+        layer.putalpha(mask)
+        caption.alpha_composite(layer)
+
+    if bar_top < 0:
+        # Caption is taller than the frame: keep the bottom part, as before.
+        caption = caption.crop((0, -bar_top, width, text_area_h))
+        bar_top = 0
+
+    seg_start, seg_end = _visible_window(segments, seg)
+    style, progress = transition_state(transition, seg_start, seg_end, t)
+    frame_rgba = composite_caption(frame.convert("RGBA"), caption, bar_top, style, progress)
 
     return _apply_watermark(frame_rgba).convert("RGB")

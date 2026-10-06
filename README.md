@@ -17,6 +17,8 @@ Generate captioned audiogram videos from any audio file. Audiogrammer transcribe
 - Optional transcript review and edit before rendering
 - Watermark: text and/or image overlay with configurable position and opacity
 - Font selector pulling from system fonts, with a bundled fallback
+- Font weight control (Thin through Black) for thinner or heavier caption letters
+- Text transitions — fade, slide, or zoom captions on and off screen
 - Settings auto-save on close and auto-load on startup, plus a one-click **Restore Defaults**
 - Cancel mid-render with automatic partial-file cleanup
 - Runs fully offline — no API keys required
@@ -66,13 +68,14 @@ On launch the app checks that the required packages (`openai-whisper`, `moviepy`
 Basic workflow:
 
 1. **Input Files** — browse for a background file (image, GIF, or video) and an audio file. Picking an audio file auto-suggests an output name next to it.
-2. **Settings** — choose the Whisper model, resolution, quality, font, colors, font size, and FPS.
+2. **Settings** — choose the Whisper model, resolution, quality, font, font weight, colors, font size, and FPS.
 3. *(Optional)* **Trim Audio…** — open the dialog to select a highlight window in the audio; only that window is transcribed and rendered. Leave unset to process the entire file.
 4. *(Optional)* **Waveform Settings…** — open the dialog to enable and configure the audio waveform overlay.
 5. **Output** — confirm or change where the `.mp4` is saved.
 6. *(Optional)* **Watermark** — add text and/or an image overlay.
-7. Click **Generate Audiogram** — the progress bar tracks transcription and then the render phase.
-8. *(Optional)* Tick **Review transcript before rendering** to proofread and correct words before the render starts.
+7. *(Optional)* **Text Transitions** — choose how captions enter and leave the screen.
+8. Click **Generate Audiogram** — the progress bar tracks transcription and then the render phase.
+9. *(Optional)* Tick **Review transcript before rendering** to proofread and correct words before the render starts.
 
 Your settings (including file paths and waveform options) are saved automatically when you close the window and restored the next time you open the app. Use **Restore Defaults** to reset everything.
 
@@ -99,6 +102,7 @@ Your settings (including file paths and waveform options) are saved automaticall
 | **Video FPS** | Output frame rate (12–60). Higher is smoother but slower to render and larger on disk. |
 | **Text Color** | Color of words that have not yet been spoken. |
 | **Highlight Color** | Color of the word currently being spoken. |
+| **Font Weight** | Thickness of the caption letters: `Font Default` (render the selected font as-is), or `Thin`, `Extra Light`, `Light`, `Regular`, `Medium`, `Semi Bold`, `Bold`, `Extra Bold`, `Black`. Variable fonts are set to the exact weight; otherwise the closest installed weight of the same font family is used (keeping italic/condensed styles). If you ask for a heavier weight than the family has, the letters are thickened with an outline in the text color. A family can't be made lighter than its lightest installed weight. The font preview reflects the chosen weight. |
 
 ### Trim Audio
 
@@ -149,6 +153,16 @@ Open via the **Waveform Settings…** button. The status next to the button show
 | **Image** | Optional image (e.g. a logo) overlaid on the video. Can be used alone or alongside text. |
 | **Position** | Corner the watermark is anchored to: Top Left, Top Right, Bottom Left, or Bottom Right. |
 | **Opacity** | Transparency of the watermark, 0–100%. |
+
+### Text Transitions
+
+Controls how each caption block (the dark bar and its words) appears and disappears. A caption appears when its sentence starts and leaves shortly after it ends, or when the next sentence begins.
+
+| Setting | Meaning |
+|---|---|
+| **In** | How a caption enters: `None` (appears instantly), `Fade` (fades in), `Slide` (rises up from the bottom edge), or `Zoom` (grows from its center while fading in). |
+| **Out** | How a caption leaves: `None` (disappears instantly), `Fade` (fades out), `Slide` (sinks off the bottom edge), or `Zoom` (shrinks toward its center while fading out). |
+| **Duration** | Length of each transition in seconds (0.05–2.0, default 0.3). On very short captions the transitions are shortened automatically so the in and out never overlap. |
 
 ### Generation Controls
 

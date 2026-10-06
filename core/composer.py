@@ -7,6 +7,7 @@ from PIL import Image
 
 from core.renderer import render_frame
 from core.transcriber import Segment
+from core.transitions import TextTransition
 from core.trim import apply_trim
 from core.watermark import WatermarkConfig, build_watermark
 from core.waveform import WaveformConfig, analyze_audio, compute_region, draw_waveform
@@ -158,6 +159,8 @@ def compose_video(
     watermark_config: Optional[WatermarkConfig] = None,
     waveform_config: Optional[WaveformConfig] = None,
     font_path: str = "",
+    font_weight: Optional[int] = None,
+    text_transition: Optional[TextTransition] = None,
     cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -202,7 +205,10 @@ def compose_video(
                 if wf_active:
                     idx = min(int(t * fps), total_frames - 1)
                     bg = draw_waveform(bg, waveform_config, wf_region, wf_data, idx, total_frames)
-                img = render_frame(bg, segments, t, font_size, text_color, highlight_color, watermark, font_path)
+                img = render_frame(
+                    bg, segments, t, font_size, text_color, highlight_color, watermark, font_path,
+                    font_weight=font_weight, transition=text_transition,
+                )
                 rendered_count[0] += 1
                 if progress_callback:
                     progress_callback(min(rendered_count[0] / total_frames, 1.0))
