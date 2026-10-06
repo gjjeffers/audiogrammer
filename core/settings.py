@@ -19,9 +19,14 @@ DEFAULTS = {
     "resolution": "1080p 1920×1080 (16:9)",
     "quality": "High",
     "font_name": "",
+    "font_weight": "Font Default",
     # Caption colors
     "text_color": "#FFFFFF",
     "highlight_color": "#FFDC00",
+    # Caption transitions
+    "text_in": "None",
+    "text_out": "None",
+    "text_transition_duration": 0.3,
     # Watermark
     "wm_text": "",
     "wm_image_path": "",
