@@ -6,6 +6,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from core import settings as _settings
 from core.fonts import FONT_DEFAULT_WEIGHT, FONT_WEIGHTS
+from core.renderer import CAPTION_POSITIONS
 from core.transitions import TRANSITION_STYLES
 
 # (target_size, suggested_font_size)
@@ -60,6 +61,7 @@ class AudiogrammerApp:
         self.highlight_color = "#FFDC00"
 
         # Caption transition state
+        self.caption_position = tk.StringVar(value="Bottom")
         self.text_in = tk.StringVar(value="None")
         self.text_out = tk.StringVar(value="None")
         self.text_transition_duration = tk.DoubleVar(value=0.3)
@@ -293,6 +295,15 @@ class AudiogrammerApp:
 
         wm.columnconfigure(1, weight=1)
 
+        # ---- Caption placement -------------------------------------------
+        pl = ttk.LabelFrame(right_col, text="Caption Placement", padding=8)
+        pl.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(pl, text="Position:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Combobox(
+            pl, textvariable=self.caption_position, values=list(CAPTION_POSITIONS.keys()),
+            width=10, state="readonly",
+        ).grid(row=0, column=1, sticky=tk.W, pady=4)
+
         # ---- Text transitions --------------------------------------------
         tr = ttk.LabelFrame(right_col, text="Text Transitions", padding=8)
         tr.pack(fill=tk.X, pady=(0, 8))
@@ -414,6 +425,7 @@ class AudiogrammerApp:
             "quality": self.quality.get(),
             "font_name": self.font_name.get(),
             "font_weight": self.font_weight.get(),
+            "caption_position": self.caption_position.get(),
             "text_in": self.text_in.get(),
             "text_out": self.text_out.get(),
             "text_transition_duration": self._transition_duration(),
@@ -463,6 +475,8 @@ class AudiogrammerApp:
             self.font_name.set(font_name)
         font_weight = data.get("font_weight", FONT_DEFAULT_WEIGHT)
         self.font_weight.set(font_weight if font_weight in FONT_WEIGHTS else FONT_DEFAULT_WEIGHT)
+        pos = data.get("caption_position", "Bottom")
+        self.caption_position.set(pos if pos in CAPTION_POSITIONS else "Bottom")
         text_in = data.get("text_in", "None")
         self.text_in.set(text_in if text_in in TRANSITION_STYLES else "None")
         text_out = data.get("text_out", "None")
@@ -831,6 +845,7 @@ class AudiogrammerApp:
                 font_path=font_path,
                 font_weight=FONT_WEIGHTS.get(self.font_weight.get()),
                 text_transition=self._build_text_transition(),
+                caption_position=CAPTION_POSITIONS.get(self.caption_position.get(), "bottom"),
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,

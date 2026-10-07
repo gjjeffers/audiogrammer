@@ -69,12 +69,14 @@ def composite_caption(
     top: int,
     style: str,
     progress: float,
+    position: str = "bottom",
 ) -> Image.Image:
     """Alpha-composite the caption layer onto frame (RGBA) at y=top, applying
     the given transition style at progress (0 = hidden, 1 = fully shown).
 
     - fade:  caption opacity follows progress.
-    - slide: caption rises from (or sinks below) the bottom edge of the frame.
+    - slide: caption moves in from (or out to) the bottom edge of the frame,
+             or the top edge when position is "top".
     - zoom:  caption grows from (or shrinks to) its centre while fading.
     """
     if style == "none" or progress >= 1.0:
@@ -85,6 +87,11 @@ def composite_caption(
 
     if style == "fade":
         frame.alpha_composite(_scale_alpha(caption, progress), (0, top))
+    elif style == "slide" and position == "top":
+        offset = int(round((1.0 - progress) * (top + caption.height)))
+        if offset < caption.height:
+            visible = caption.crop((0, offset, caption.width, caption.height))
+            frame.alpha_composite(visible, (0, top))
     elif style == "slide":
         offset = int(round((1.0 - progress) * (frame.height - top)))
         if top + offset < frame.height:

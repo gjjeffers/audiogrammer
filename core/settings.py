@@ -23,6 +23,7 @@ DEFAULTS = {
     # Caption colors
     "text_color": "#FFFFFF",
     "highlight_color": "#FFDC00",
+    "caption_position": "Bottom",
     # Caption transitions
     "text_in": "None",
     "text_out": "None",

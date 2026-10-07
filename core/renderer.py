@@ -51,6 +51,10 @@ def _load_font(size: int, font_path: str = "") -> ImageFont.ImageFont:
 _weighted_cache: dict = {}
 
 
+# GUI label -> position id accepted by render_frame.
+CAPTION_POSITIONS = {"Top": "top", "Middle": "middle", "Bottom": "bottom"}
+
+
 def _load_caption_font(size: int, font_path: str = "", weight: Optional[int] = None):
     """Return (font, stroke_width) for captions at the requested weight class.
 
@@ -132,6 +136,7 @@ def render_frame(
     font_path: str = "",
     font_weight: Optional[int] = None,
     transition: Optional[TextTransition] = None,
+    position: str = "bottom",
 ) -> Image.Image:
     frame = gif_frame.convert("RGB")
 
@@ -201,7 +206,12 @@ def render_frame(
     # fade, slide or scale it as a unit before it's composited onto the frame.
     v_pad = 14
     text_area_h = len(lines) * line_h + 2 * v_pad
-    bar_top = height - text_area_h
+    if position == "top":
+        bar_top = 0
+    elif position == "middle":
+        bar_top = (height - text_area_h) // 2
+    else:
+        bar_top = height - text_area_h
 
     caption = Image.new("RGBA", (width, text_area_h), (0, 0, 0, 185))
 
@@ -235,13 +245,18 @@ def render_frame(
         layer.putalpha(mask)
         caption.alpha_composite(layer)
 
-    if bar_top < 0:
-        # Caption is taller than the frame: keep the bottom part, as before.
-        caption = caption.crop((0, -bar_top, width, text_area_h))
+    if text_area_h > height:
+        # Caption is taller than the frame: keep the part nearest the anchor
+        # edge (middle trims both ends evenly).
+        overflow = text_area_h - height
+        crop_top = {"top": 0, "middle": overflow // 2}.get(position, overflow)
+        caption = caption.crop((0, crop_top, width, crop_top + height))
         bar_top = 0
 
     seg_start, seg_end = _visible_window(segments, seg)
     style, progress = transition_state(transition, seg_start, seg_end, t)
-    frame_rgba = composite_caption(frame.convert("RGBA"), caption, bar_top, style, progress)
+    frame_rgba = composite_caption(
+        frame.convert("RGBA"), caption, bar_top, style, progress, position,
+    )
 
     return _apply_watermark(frame_rgba).convert("RGB")
