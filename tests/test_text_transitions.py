@@ -99,3 +99,17 @@ def test_caption_taller_than_frame_is_clipped():
         tr = TextTransition(style, style, 0.5)
         for t in (0.1, 1.0, 2.3):
             assert render_frame(bg, segs, t, 40, transition=tr).size == (60, 40)
+
+
+def test_caption_position_places_bar_in_requested_area():
+    bg = Image.new("RGB", (60, 240), (10, 20, 30))
+    segs = [_seg(1.0, 3.0)]
+
+    def dark_rows(pos):
+        img = render_frame(bg, segs, 2.0, 24, position=pos)
+        return [y for y in range(240) if img.getpixel((2, y)) != (10, 20, 30)]
+
+    top, mid, bot = dark_rows("top"), dark_rows("middle"), dark_rows("bottom")
+    assert top[0] == 0 and top[-1] < 100
+    assert 60 < mid[0] and mid[-1] < 180
+    assert bot[-1] == 239 and bot[0] > 140
