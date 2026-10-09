@@ -131,7 +131,7 @@ def render_frame(
     t: float,
     font_size: int = 40,
     text_color: Tuple[int, int, int] = (255, 255, 255),
-    highlight_color: Tuple[int, int, int] = (255, 220, 0),
+    highlight_color: Optional[Tuple[int, int, int]] = (255, 220, 0),
     watermark: Optional[Image.Image] = None,
     font_path: str = "",
     font_weight: Optional[int] = None,
@@ -229,7 +229,9 @@ def render_frame(
 
         for wi, wt, xo in line:
             x = x_start + xo + stroke
-            if wi < cur_wi:
+            if highlight_color is None:
+                color = text_color
+            elif wi < cur_wi:
                 color = dim(text_color, 0.55)
             elif wi == cur_wi:
                 color = highlight_color

@@ -59,6 +59,7 @@ class AudiogrammerApp:
         self._preview_photo = None
         self.text_color = "#FFFFFF"
         self.highlight_color = "#FFDC00"
+        self.highlight_enabled = tk.BooleanVar(value=True)
 
         # Caption transition state
         self.caption_position = tk.StringVar(value="Bottom")
@@ -237,6 +238,11 @@ class AudiogrammerApp:
             command=self._pick_highlight_color,
         )
         self._highlight_btn.grid(row=10, column=1, sticky=tk.W, pady=4)
+        ttk.Checkbutton(
+            settings, text="Enabled", variable=self.highlight_enabled,
+            command=self._update_highlight_state,
+        ).grid(row=10, column=2, sticky=tk.W, pady=4, padx=(8, 0))
+        self._update_highlight_state()
 
         ttk.Label(settings, text="Caption Background:").grid(row=11, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         bg_op = ttk.Frame(settings)
@@ -442,6 +448,7 @@ class AudiogrammerApp:
             "text_transition_duration": self._transition_duration(),
             "text_color": self.text_color,
             "highlight_color": self.highlight_color,
+            "highlight_enabled": self.highlight_enabled.get(),
             "wm_text": self.wm_text.get(),
             "wm_image_path": self.wm_image_path.get(),
             "wm_position": self.wm_position.get(),
@@ -498,6 +505,8 @@ class AudiogrammerApp:
         self._text_color_btn.config(bg=self.text_color)
         self.highlight_color = data.get("highlight_color", "#FFDC00")
         self._highlight_btn.config(bg=self.highlight_color)
+        self.highlight_enabled.set(data.get("highlight_enabled", True))
+        self._update_highlight_state()
         self.wm_text.set(data.get("wm_text", ""))
         self.wm_image_path.set(data.get("wm_image_path", ""))
         self.wm_position.set(data.get("wm_position", "Bottom Right"))
@@ -590,6 +599,11 @@ class AudiogrammerApp:
         if result and result[1]:
             self.text_color = result[1]
             self._text_color_btn.config(bg=self.text_color)
+
+    def _update_highlight_state(self) -> None:
+        self._highlight_btn.config(
+            state=tk.NORMAL if self.highlight_enabled.get() else tk.DISABLED
+        )
 
     def _pick_highlight_color(self) -> None:
         result = colorchooser.askcolor(color=self.highlight_color, title="Choose highlight color")
@@ -851,7 +865,9 @@ class AudiogrammerApp:
                 fps=self.fps.get(),
                 font_size=self.font_size.get(),
                 text_color=_hex_to_rgb(self.text_color),
-                highlight_color=_hex_to_rgb(self.highlight_color),
+                highlight_color=(
+                    _hex_to_rgb(self.highlight_color) if self.highlight_enabled.get() else None
+                ),
                 target_size=target_size,
                 crf=crf,
                 preset=preset,
