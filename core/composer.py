@@ -152,7 +152,7 @@ def compose_video(
     fps: int = 24,
     font_size: int = 40,
     text_color: Tuple[int, int, int] = (255, 255, 255),
-    highlight_color: Tuple[int, int, int] = (255, 220, 0),
+    highlight_color: Optional[Tuple[int, int, int]] = (255, 220, 0),
     target_size: Optional[Tuple[int, int]] = None,
     crf: int = 18,
     preset: str = "slow",
