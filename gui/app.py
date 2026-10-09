@@ -62,6 +62,7 @@ class AudiogrammerApp:
 
         # Caption transition state
         self.caption_position = tk.StringVar(value="Bottom")
+        self.caption_bg_opacity = tk.DoubleVar(value=73.0)
         self.text_in = tk.StringVar(value="None")
         self.text_out = tk.StringVar(value="None")
         self.text_transition_duration = tk.DoubleVar(value=0.3)
@@ -236,6 +237,15 @@ class AudiogrammerApp:
             command=self._pick_highlight_color,
         )
         self._highlight_btn.grid(row=10, column=1, sticky=tk.W, pady=4)
+
+        ttk.Label(settings, text="Caption Background:").grid(row=11, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        bg_op = ttk.Frame(settings)
+        bg_op.grid(row=11, column=1, columnspan=2, sticky=tk.W, pady=4)
+        ttk.Scale(bg_op, variable=self.caption_bg_opacity, from_=0, to=100,
+                  orient=tk.HORIZONTAL, length=100).pack(side=tk.LEFT)
+        self._caption_bg_label = ttk.Label(bg_op, text="73%", width=5)
+        self._caption_bg_label.pack(side=tk.LEFT, padx=(6, 0))
+        self.caption_bg_opacity.trace_add("write", self._update_caption_bg_label)
 
         # ---- Waveform settings launcher ----------------------------------
         wf_row = ttk.Frame(left_col)
@@ -426,6 +436,7 @@ class AudiogrammerApp:
             "font_name": self.font_name.get(),
             "font_weight": self.font_weight.get(),
             "caption_position": self.caption_position.get(),
+            "caption_bg_opacity": self.caption_bg_opacity.get(),
             "text_in": self.text_in.get(),
             "text_out": self.text_out.get(),
             "text_transition_duration": self._transition_duration(),
@@ -482,6 +493,7 @@ class AudiogrammerApp:
         text_out = data.get("text_out", "None")
         self.text_out.set(text_out if text_out in TRANSITION_STYLES else "None")
         self.text_transition_duration.set(data.get("text_transition_duration", 0.3))
+        self.caption_bg_opacity.set(data.get("caption_bg_opacity", 73.0))
         self.text_color = data.get("text_color", "#FFFFFF")
         self._text_color_btn.config(bg=self.text_color)
         self.highlight_color = data.get("highlight_color", "#FFDC00")
@@ -604,6 +616,9 @@ class AudiogrammerApp:
 
     def _update_opacity_label(self, *_) -> None:
         self._wm_opacity_label.config(text=f"{int(self.wm_opacity.get())}%")
+
+    def _update_caption_bg_label(self, *_) -> None:
+        self._caption_bg_label.config(text=f"{int(self.caption_bg_opacity.get())}%")
 
     def _on_resolution_changed(self, _event=None) -> None:
         _, suggested_font = _RESOLUTIONS.get(self.resolution.get(), (None, 40))
@@ -846,6 +861,7 @@ class AudiogrammerApp:
                 font_weight=FONT_WEIGHTS.get(self.font_weight.get()),
                 text_transition=self._build_text_transition(),
                 caption_position=CAPTION_POSITIONS.get(self.caption_position.get(), "bottom"),
+                caption_bg_opacity=self.caption_bg_opacity.get() / 100.0,
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,

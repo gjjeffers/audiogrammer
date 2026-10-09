@@ -24,6 +24,7 @@ DEFAULTS = {
     "text_color": "#FFFFFF",
     "highlight_color": "#FFDC00",
     "caption_position": "Bottom",
+    "caption_bg_opacity": 73.0,
     # Caption transitions
     "text_in": "None",
     "text_out": "None",

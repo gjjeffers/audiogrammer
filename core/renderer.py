@@ -137,6 +137,7 @@ def render_frame(
     font_weight: Optional[int] = None,
     transition: Optional[TextTransition] = None,
     position: str = "bottom",
+    bg_opacity: float = 0.73,
 ) -> Image.Image:
     frame = gif_frame.convert("RGB")
 
@@ -213,7 +214,7 @@ def render_frame(
     else:
         bar_top = height - text_area_h
 
-    caption = Image.new("RGBA", (width, text_area_h), (0, 0, 0, 185))
+    caption = Image.new("RGBA", (width, text_area_h), (0, 0, 0, int(round(max(0.0, min(1.0, bg_opacity)) * 255))))
 
     # One coverage mask per colour, so antialiased edges blend exactly as if
     # the words had been drawn straight onto the frame.
