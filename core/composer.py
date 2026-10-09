@@ -162,6 +162,7 @@ def compose_video(
     font_weight: Optional[int] = None,
     text_transition: Optional[TextTransition] = None,
     caption_position: str = "bottom",
+    caption_bg_opacity: float = 0.73,
     cancel_event: Optional[threading.Event] = None,
     status_callback: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -209,7 +210,7 @@ def compose_video(
                 img = render_frame(
                     bg, segments, t, font_size, text_color, highlight_color, watermark, font_path,
                     font_weight=font_weight, transition=text_transition,
-                    position=caption_position,
+                    position=caption_position, bg_opacity=caption_bg_opacity,
                 )
                 rendered_count[0] += 1
                 if progress_callback:
