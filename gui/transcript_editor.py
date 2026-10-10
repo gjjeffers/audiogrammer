@@ -16,7 +16,8 @@ class TranscriptEditorDialog(tk.Toplevel):
     ) -> None:
         super().__init__(parent)
         self.title("Review Transcript")
-        self.geometry("680x520")
+        self.geometry("680x640")
+        self.minsize(520, 420)
         self.resizable(True, True)
         self.transient(parent)
         self.update_idletasks()  # ensure window is mapped before grab_set on X11
@@ -41,8 +42,16 @@ class TranscriptEditorDialog(tk.Toplevel):
             wraplength=640,
         ).pack(anchor=tk.W)
 
+        # Pack the button bar first (anchored to the bottom) so it always keeps
+        # its space; the text area then takes whatever remains.
+        btn_bar = ttk.Frame(self, padding=(12, 4, 12, 10))
+        btn_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        ttk.Button(btn_bar, text="Update Transcript", command=self._do_render).pack(side=tk.RIGHT, padx=(6, 0))
+        ttk.Button(btn_bar, text="Cancel", command=self._do_cancel).pack(side=tk.RIGHT)
+
         self._text = scrolledtext.ScrolledText(
-            self, wrap=tk.WORD, font=("TkFixedFont", 11), relief=tk.SUNKEN, borderwidth=1
+            self, wrap=tk.WORD, font=("TkFixedFont", 11), relief=tk.SUNKEN, borderwidth=1,
+            height=10,
         )
         self._text.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
 
@@ -50,11 +59,6 @@ class TranscriptEditorDialog(tk.Toplevel):
         self._text.tag_configure("header", foreground="#888888", font=("TkFixedFont", 10))
 
         self._populate()
-
-        btn_bar = ttk.Frame(self, padding=(12, 4, 12, 10))
-        btn_bar.pack(fill=tk.X)
-        ttk.Button(btn_bar, text="Update Transcript", command=self._do_render).pack(side=tk.RIGHT, padx=(6, 0))
-        ttk.Button(btn_bar, text="Cancel", command=self._do_cancel).pack(side=tk.RIGHT)
 
     def _populate(self) -> None:
         self._text.delete("1.0", tk.END)
