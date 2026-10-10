@@ -133,8 +133,10 @@ class AudiogrammerApp:
         right_col = ttk.Frame(columns_frame)
         right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # ---- Input files -------------------------------------------------
-        files = ttk.LabelFrame(left_col, text="Input Files", padding=8)
+        # ================= LEFT COLUMN: what goes in / what comes out =========
+
+        # ---- Input -------------------------------------------------------
+        files = ttk.LabelFrame(left_col, text="Input", padding=8)
         files.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(files, text="Background:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
@@ -145,11 +147,8 @@ class AudiogrammerApp:
         ttk.Entry(files, textvariable=self.audio_path).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
         ttk.Button(files, text="Browse…", command=self._browse_audio).grid(row=1, column=2, pady=4)
 
-        files.columnconfigure(1, weight=1)
-
-        # ---- Trim launcher ----------------------------------------------
-        trim_row = ttk.Frame(left_col)
-        trim_row.pack(fill=tk.X, pady=(0, 4))
+        trim_row = ttk.Frame(files)
+        trim_row.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=4)
         ttk.Button(trim_row, text="Trim Audio…", command=self._open_trim_dialog).pack(side=tk.LEFT)
         self._trim_status_label = ttk.Label(trim_row, text="(full)", foreground="#888888")
         self._trim_status_label.pack(side=tk.LEFT, padx=(8, 0))
@@ -157,13 +156,15 @@ class AudiogrammerApp:
         self.trim_start.trace_add("write", self._update_trim_status)
         self.trim_end.trace_add("write", self._update_trim_status)
 
-        # ---- Settings ----------------------------------------------------
-        settings = ttk.LabelFrame(left_col, text="Settings", padding=8)
-        settings.pack(fill=tk.X, pady=(0, 8))
+        files.columnconfigure(1, weight=1)
 
-        ttk.Label(settings, text="Whisper Model:").grid(row=0, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        # ---- Transcription -----------------------------------------------
+        tx = ttk.LabelFrame(left_col, text="Transcription", padding=8)
+        tx.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(tx, text="Whisper Model:").grid(row=0, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         model_cb = ttk.Combobox(
-            settings,
+            tx,
             textvariable=self.model_size,
             values=_settings.ALL_MODELS,
             width=14,
@@ -172,106 +173,141 @@ class AudiogrammerApp:
         model_cb.grid(row=0, column=1, sticky=tk.W, pady=4)
         self._model_cb = model_cb
         ttk.Label(
-            settings, text="  (larger = more accurate, slower; turbo ≈ large-v3 speed/quality)"
+            tx, text="  (larger = more accurate, slower; turbo ≈ large-v3 speed/quality)"
         ).grid(row=0, column=2, sticky=tk.W)
 
-        ttk.Label(settings, text="Resolution:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        # ---- Output ------------------------------------------------------
+        output = ttk.LabelFrame(left_col, text="Output", padding=8)
+        output.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(output, text="Save to:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Entry(output, textvariable=self.output_path).grid(row=0, column=1, columnspan=2, sticky=tk.EW, padx=(0, 4), pady=4)
+        ttk.Button(output, text="Browse…", command=self._browse_output).grid(row=0, column=3, pady=4)
+
+        ttk.Label(output, text="Resolution:").grid(row=1, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         res_cb = ttk.Combobox(
-            settings,
+            output,
             textvariable=self.resolution,
             values=list(_RESOLUTIONS.keys()),
             width=26,
             state="readonly",
         )
-        res_cb.grid(row=2, column=1, sticky=tk.W, pady=4)
+        res_cb.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=4)
         res_cb.bind("<<ComboboxSelected>>", self._on_resolution_changed)
 
-        ttk.Label(settings, text="Quality:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(output, text="Quality:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Combobox(
-            settings,
+            output,
             textvariable=self.quality,
             values=list(_QUALITIES.keys()),
             width=14,
             state="readonly",
-        ).grid(row=3, column=1, sticky=tk.W, pady=4)
-        ttk.Label(settings, text="  (High = CRF 18, slow preset)").grid(row=3, column=2, sticky=tk.W)
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+        ttk.Label(output, text="  (High = CRF 18, slow preset)").grid(row=2, column=2, columnspan=2, sticky=tk.W)
 
-        ttk.Label(settings, text="Font:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(output, text="Video FPS:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Spinbox(output, textvariable=self.fps, from_=12, to=60, width=6).grid(
+            row=3, column=1, sticky=tk.W, pady=4
+        )
+        output.columnconfigure(2, weight=1)
+
+        # ================= RIGHT COLUMN: how the video looks ==================
+
+        # ---- Captions ----------------------------------------------------
+        settings = ttk.LabelFrame(right_col, text="Captions", padding=8)
+        settings.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(settings, text="Font:").grid(row=0, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._font_cb = ttk.Combobox(
             settings, textvariable=self.font_name,
             values=["(loading fonts…)"], width=26, state="disabled",
         )
-        self._font_cb.grid(row=4, column=1, columnspan=2, sticky=tk.W, pady=4)
+        self._font_cb.grid(row=0, column=1, columnspan=2, sticky=tk.W, pady=4)
         self.font_name.trace_add("write", self._update_font_preview)
 
         self._preview_label = tk.Label(settings, text="", anchor=tk.W, bd=1, relief=tk.SUNKEN)
-        self._preview_label.grid(row=5, column=1, columnspan=2, sticky=tk.EW, pady=(0, 6))
+        self._preview_label.grid(row=1, column=1, columnspan=2, sticky=tk.EW, pady=(0, 6))
 
-        ttk.Label(settings, text="Font Size:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Font Size:").grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Spinbox(settings, textvariable=self.font_size, from_=16, to=160, width=6).grid(
-            row=6, column=1, sticky=tk.W, pady=4
+            row=2, column=1, sticky=tk.W, pady=4
         )
 
-        ttk.Label(settings, text="Font Weight:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Font Weight:").grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Combobox(
             settings, textvariable=self.font_weight,
             values=list(FONT_WEIGHTS.keys()), width=14, state="readonly",
-        ).grid(row=7, column=1, sticky=tk.W, pady=4)
-        ttk.Label(settings, text="  (thickness of the caption letters)").grid(row=7, column=2, sticky=tk.W)
+        ).grid(row=3, column=1, sticky=tk.W, pady=4)
+        ttk.Label(settings, text="  (thickness of the caption letters)").grid(row=3, column=2, sticky=tk.W)
         self.font_weight.trace_add("write", self._update_font_preview)
 
-        ttk.Label(settings, text="Video FPS:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Spinbox(settings, textvariable=self.fps, from_=12, to=60, width=6).grid(
-            row=8, column=1, sticky=tk.W, pady=4
-        )
+        ttk.Label(settings, text="Position:").grid(row=4, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Combobox(
+            settings, textvariable=self.caption_position, values=list(CAPTION_POSITIONS.keys()),
+            width=14, state="readonly",
+        ).grid(row=4, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Text Color:").grid(row=9, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Text Color:").grid(row=5, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._text_color_btn = tk.Button(
             settings, bg=self.text_color, width=5, relief=tk.GROOVE,
             command=self._pick_text_color,
         )
-        self._text_color_btn.grid(row=9, column=1, sticky=tk.W, pady=4)
+        self._text_color_btn.grid(row=5, column=1, sticky=tk.W, pady=4)
 
-        ttk.Label(settings, text="Highlight Color:").grid(row=10, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Highlight Color:").grid(row=6, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         self._highlight_btn = tk.Button(
             settings, bg=self.highlight_color, width=5, relief=tk.GROOVE,
             command=self._pick_highlight_color,
         )
-        self._highlight_btn.grid(row=10, column=1, sticky=tk.W, pady=4)
+        self._highlight_btn.grid(row=6, column=1, sticky=tk.W, pady=4)
         ttk.Checkbutton(
             settings, text="Enabled", variable=self.highlight_enabled,
             command=self._update_highlight_state,
-        ).grid(row=10, column=2, sticky=tk.W, pady=4, padx=(8, 0))
+        ).grid(row=6, column=2, sticky=tk.W, pady=4, padx=(8, 0))
         self._update_highlight_state()
 
-        ttk.Label(settings, text="Caption Background:").grid(row=11, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        ttk.Label(settings, text="Background:").grid(row=7, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         bg_op = ttk.Frame(settings)
-        bg_op.grid(row=11, column=1, columnspan=2, sticky=tk.W, pady=4)
+        bg_op.grid(row=7, column=1, columnspan=2, sticky=tk.W, pady=4)
         ttk.Scale(bg_op, variable=self.caption_bg_opacity, from_=0, to=100,
                   orient=tk.HORIZONTAL, length=100).pack(side=tk.LEFT)
         self._caption_bg_label = ttk.Label(bg_op, text="73%", width=5)
         self._caption_bg_label.pack(side=tk.LEFT, padx=(6, 0))
         self.caption_bg_opacity.trace_add("write", self._update_caption_bg_label)
 
-        # ---- Waveform settings launcher ----------------------------------
-        wf_row = ttk.Frame(left_col)
-        wf_row.pack(fill=tk.X, pady=(0, 4))
+        # ---- Text transitions --------------------------------------------
+        tr = ttk.LabelFrame(right_col, text="Caption Transitions", padding=8)
+        tr.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(tr, text="In:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Combobox(
+            tr, textvariable=self.text_in, values=list(TRANSITION_STYLES.keys()),
+            width=10, state="readonly",
+        ).grid(row=0, column=1, sticky=tk.W, pady=4)
+
+        ttk.Label(tr, text="Out:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Combobox(
+            tr, textvariable=self.text_out, values=list(TRANSITION_STYLES.keys()),
+            width=10, state="readonly",
+        ).grid(row=1, column=1, sticky=tk.W, pady=4)
+
+        ttk.Label(tr, text="Duration:").grid(row=2, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        ttk.Spinbox(
+            tr, textvariable=self.text_transition_duration,
+            from_=0.05, to=2.0, increment=0.05, width=6, format="%.2f",
+        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+        ttk.Label(tr, text="sec").grid(row=2, column=2, sticky=tk.W, padx=(4, 0))
+
+        # ---- Waveform launcher -------------------------------------------
+        wf = ttk.LabelFrame(right_col, text="Waveform", padding=8)
+        wf.pack(fill=tk.X, pady=(0, 8))
         self._wf_btn = ttk.Button(
-            wf_row, text="Waveform Settings…", command=self._open_waveform_settings
+            wf, text="Waveform Settings…", command=self._open_waveform_settings
         )
         self._wf_btn.pack(side=tk.LEFT)
-        self._wf_status_label = ttk.Label(wf_row, text="(off)", foreground="#888888")
+        self._wf_status_label = ttk.Label(wf, text="(off)", foreground="#888888")
         self._wf_status_label.pack(side=tk.LEFT, padx=(8, 0))
         self.wf_enabled.trace_add("write", self._update_wf_status)
-
-        # ---- Output ------------------------------------------------------
-        output = ttk.LabelFrame(right_col, text="Output", padding=8)
-        output.pack(fill=tk.X, pady=(0, 8))
-
-        ttk.Label(output, text="Save to:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Entry(output, textvariable=self.output_path).grid(row=0, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
-        ttk.Button(output, text="Browse…", command=self._browse_output).grid(row=0, column=2, pady=4)
-        output.columnconfigure(1, weight=1)
 
         # ---- Watermark -------------------------------------------------------
         wm = ttk.LabelFrame(right_col, text="Watermark  (leave blank to disable)", padding=8)
@@ -310,38 +346,6 @@ class AudiogrammerApp:
         self.wm_opacity.trace_add("write", self._update_opacity_label)
 
         wm.columnconfigure(1, weight=1)
-
-        # ---- Caption placement -------------------------------------------
-        pl = ttk.LabelFrame(right_col, text="Caption Placement", padding=8)
-        pl.pack(fill=tk.X, pady=(0, 8))
-        ttk.Label(pl, text="Position:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Combobox(
-            pl, textvariable=self.caption_position, values=list(CAPTION_POSITIONS.keys()),
-            width=10, state="readonly",
-        ).grid(row=0, column=1, sticky=tk.W, pady=4)
-
-        # ---- Text transitions --------------------------------------------
-        tr = ttk.LabelFrame(right_col, text="Text Transitions", padding=8)
-        tr.pack(fill=tk.X, pady=(0, 8))
-
-        ttk.Label(tr, text="In:").grid(row=0, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Combobox(
-            tr, textvariable=self.text_in, values=list(TRANSITION_STYLES.keys()),
-            width=10, state="readonly",
-        ).grid(row=0, column=1, sticky=tk.W, pady=4)
-
-        ttk.Label(tr, text="Out:").grid(row=1, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Combobox(
-            tr, textvariable=self.text_out, values=list(TRANSITION_STYLES.keys()),
-            width=10, state="readonly",
-        ).grid(row=1, column=1, sticky=tk.W, pady=4)
-
-        ttk.Label(tr, text="Duration:").grid(row=2, column=0, sticky=tk.W, padx=(0, 6), pady=4)
-        ttk.Spinbox(
-            tr, textvariable=self.text_transition_duration,
-            from_=0.05, to=2.0, increment=0.05, width=6, format="%.2f",
-        ).grid(row=2, column=1, sticky=tk.W, pady=4)
-        ttk.Label(tr, text="sec").grid(row=2, column=2, sticky=tk.W, padx=(4, 0))
 
         # ---- Generate / Cancel buttons -----------------------------------
         btn_row = ttk.Frame(root_frame)
