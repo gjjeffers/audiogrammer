@@ -206,6 +206,13 @@ Speed factor is relative to `large` (1×).
 
 Settings are stored as JSON at `~/.audiogrammer/settings.json`. They are written automatically when you close the window and loaded on startup. Delete that file (or click **Restore Defaults**) to start fresh.
 
+### Saving, exporting and importing configurations
+
+The **Configuration** menu lets you keep settings safe and portable:
+
+- **Save as Preset…** / **Load Preset** / **Delete Preset** — named presets stored in `~/.audiogrammer/presets/`.
+- **Export to File…** / **Import from File…** — write all settings to a `.json` file you choose, or load one (unknown or invalid values are ignored in favour of defaults).
+
 
 ## Tips
 
