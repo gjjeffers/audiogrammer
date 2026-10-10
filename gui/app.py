@@ -2,7 +2,7 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 from core import settings as _settings
 from core.fonts import FONT_DEFAULT_WEIGHT, FONT_WEIGHTS
@@ -110,6 +110,7 @@ class AudiogrammerApp:
         self._pending_original = None  # raw segments while the review dialog is open
 
         self._build_ui()
+        self._build_menu()
         self._poll()
         _loaded = _settings.load()
         self._pending_font_name = _loaded.get("font_name", "")
@@ -535,6 +536,97 @@ class AudiogrammerApp:
         self.trim_enabled.set(data.get("trim_enabled", False))
         self.trim_start.set(data.get("trim_start", 0.0))
         self.trim_end.set(data.get("trim_end", 0.0))
+
+    # ------------------------------------------------------------------
+    # Configuration export / import / presets
+    # ------------------------------------------------------------------
+
+    def _build_menu(self) -> None:
+        menubar = tk.Menu(self.root)
+        self._config_menu = tk.Menu(menubar, tearoff=False, postcommand=self._refresh_config_menu)
+        menubar.add_cascade(label="Configuration", menu=self._config_menu)
+        self._preset_menu = tk.Menu(self._config_menu, tearoff=False)
+        self._delete_preset_menu = tk.Menu(self._config_menu, tearoff=False)
+        self.root.config(menu=menubar)
+        self._refresh_config_menu()
+
+    def _refresh_config_menu(self) -> None:
+        m = self._config_menu
+        m.delete(0, tk.END)
+        presets = _settings.list_presets()
+        m.add_command(label="Save as Preset…", command=self._save_preset)
+        for sub, cmd in ((self._preset_menu, self._load_preset),
+                         (self._delete_preset_menu, self._delete_preset)):
+            sub.delete(0, tk.END)
+            for name in presets:
+                sub.add_command(label=name, command=lambda n=name, c=cmd: c(n))
+        state = tk.NORMAL if presets else tk.DISABLED
+        m.add_cascade(label="Load Preset", menu=self._preset_menu, state=state)
+        m.add_cascade(label="Delete Preset", menu=self._delete_preset_menu, state=state)
+        m.add_separator()
+        m.add_command(label="Import from File…", command=self._import_config)
+        m.add_command(label="Export to File…", command=self._export_config)
+
+    def _apply_config(self, data: dict) -> None:
+        self._apply_settings(data)
+        self._update_font_preview()
+
+    def _save_preset(self) -> None:
+        name = simpledialog.askstring("Save Preset", "Preset name:", parent=self.root)
+        if not name or not name.strip():
+            return
+        try:
+            if name.strip() in _settings.list_presets() and not messagebox.askyesno(
+                "Overwrite preset", f"Preset '{name.strip()}' exists. Overwrite it?"
+            ):
+                return
+            _settings.save_preset(name, self._collect_settings())
+        except (ValueError, OSError) as e:
+            messagebox.showerror("Save Preset", str(e))
+            return
+        self._status_var.set(f"Saved preset '{name.strip()}'")
+
+    def _load_preset(self, name: str) -> None:
+        try:
+            self._apply_config(_settings.load_preset(name))
+        except ValueError as e:
+            messagebox.showerror("Load Preset", str(e))
+            return
+        self._status_var.set(f"Loaded preset '{name}'")
+
+    def _delete_preset(self, name: str) -> None:
+        if messagebox.askyesno("Delete Preset", f"Delete preset '{name}'?"):
+            _settings.delete_preset(name)
+
+    def _export_config(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="Export Configuration", defaultextension=".json",
+            initialfile="audiogrammer-config.json",
+            filetypes=[("Audiogrammer config", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            _settings.export_config(self._collect_settings(), path)
+        except OSError as e:
+            messagebox.showerror("Export Configuration", str(e))
+            return
+        self._status_var.set(f"Exported configuration to {path}")
+
+    def _import_config(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Import Configuration",
+            filetypes=[("Audiogrammer config", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            data = _settings.import_config(path)
+        except ValueError as e:
+            messagebox.showerror("Import Configuration", str(e))
+            return
+        self._apply_config(data)
+        self._status_var.set(f"Imported configuration from {path}")
 
     def on_close(self) -> None:
         _settings.save(self._collect_settings())
