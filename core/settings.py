@@ -26,6 +26,8 @@ DEFAULTS = {
     "highlight_enabled": True,
     "caption_position": "Bottom",
     "caption_bg_opacity": 73.0,
+    "caption_bg_edge_style": "Hard",
+    "caption_bg_edge_size": 40,
     # Caption transitions
     "text_in": "None",
     "text_out": "None",

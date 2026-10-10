@@ -103,6 +103,7 @@ Your settings (including file paths and waveform options) are saved automaticall
 | **Text Color** | Color of words that have not yet been spoken. |
 | **Highlight Color** | Color of the word currently being spoken. |
 | **Caption Background** | Opacity of the dark bar behind the captions, 0–100% (0 = no bar). |
+| **Edge** | Border style of the caption bar: `Hard` (plain edge), `Fade` (the edge facing the video fades out smoothly), `Rounded` (inset bar with rounded corners), or `Feather` (rounded bar with a soft blurred edge all round). **Size** sets the fade/radius/blur width in pixels. |
 | **Font Weight** | Thickness of the caption letters: `Font Default` (render the selected font as-is), or `Thin`, `Extra Light`, `Light`, `Regular`, `Medium`, `Semi Bold`, `Bold`, `Extra Bold`, `Black`. Variable fonts are set to the exact weight; otherwise the closest installed weight of the same font family is used (keeping italic/condensed styles). If you ask for a heavier weight than the family has, the letters are thickened with an outline in the text color. A family can't be made lighter than its lightest installed weight. The font preview reflects the chosen weight. |
 
 ### Trim Audio
