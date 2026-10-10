@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+from core.caption_bar import build_bar
 from core.color import dim
 from core.fonts import load_weighted_font
 from core.transcriber import Segment, Word
@@ -138,6 +139,8 @@ def render_frame(
     transition: Optional[TextTransition] = None,
     position: str = "bottom",
     bg_opacity: float = 0.73,
+    bg_edge_style: str = "hard",
+    bg_edge_size: int = 0,
 ) -> Image.Image:
     frame = gif_frame.convert("RGB")
 
@@ -214,7 +217,11 @@ def render_frame(
     else:
         bar_top = height - text_area_h
 
-    caption = Image.new("RGBA", (width, text_area_h), (0, 0, 0, int(round(max(0.0, min(1.0, bg_opacity)) * 255))))
+    caption, pad_top = build_bar(
+        width, text_area_h, bg_opacity, bg_edge_style, bg_edge_size, position,
+    )
+    bar_top -= pad_top
+    text_off = pad_top
 
     # One coverage mask per colour, so antialiased edges blend exactly as if
     # the words had been drawn straight onto the frame.
@@ -225,7 +232,7 @@ def render_frame(
         last_wi, last_wt, last_xo = line[-1]
         line_width = last_xo + _text_width(font, last_wt) + 2 * stroke
         x_start = (width - line_width) // 2
-        y = v_pad + li * line_h + stroke
+        y = text_off + v_pad + li * line_h + stroke
 
         for wi, wt, xo in line:
             x = x_start + xo + stroke
@@ -248,13 +255,17 @@ def render_frame(
         layer.putalpha(mask)
         caption.alpha_composite(layer)
 
-    if text_area_h > height:
-        # Caption is taller than the frame: keep the part nearest the anchor
-        # edge (middle trims both ends evenly).
-        overflow = text_area_h - height
-        crop_top = {"top": 0, "middle": overflow // 2}.get(position, overflow)
-        caption = caption.crop((0, crop_top, width, crop_top + height))
-        bar_top = 0
+    if bar_top < 0 or bar_top + caption.height > height:
+        # Caption hangs off the frame (feather margin, or taller than the
+        # frame): keep the on-screen part, anchored to the chosen edge when
+        # it's too tall to fit.
+        if caption.height > height:
+            overflow = caption.height - height
+            bar_top = {"top": 0, "middle": -(overflow // 2)}.get(position, -overflow)
+        crop_top = max(0, -bar_top)
+        crop_bot = min(caption.height, height - bar_top)
+        caption = caption.crop((0, crop_top, width, crop_bot))
+        bar_top += crop_top
 
     seg_start, seg_end = _visible_window(segments, seg)
     style, progress = transition_state(transition, seg_start, seg_end, t)

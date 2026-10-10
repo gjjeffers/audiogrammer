@@ -6,6 +6,7 @@ from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 
 from core import settings as _settings
 from core.fonts import FONT_DEFAULT_WEIGHT, FONT_WEIGHTS
+from core.caption_bar import CAPTION_EDGE_STYLES
 from core.renderer import CAPTION_POSITIONS
 from core.transitions import TRANSITION_STYLES
 
@@ -65,6 +66,8 @@ class AudiogrammerApp:
         # Caption transition state
         self.caption_position = tk.StringVar(value="Bottom")
         self.caption_bg_opacity = tk.DoubleVar(value=73.0)
+        self.caption_bg_edge_style = tk.StringVar(value="Hard")
+        self.caption_bg_edge_size = tk.IntVar(value=40)
         self.text_in = tk.StringVar(value="None")
         self.text_out = tk.StringVar(value="None")
         self.text_transition_duration = tk.DoubleVar(value=0.3)
@@ -277,6 +280,18 @@ class AudiogrammerApp:
         self._caption_bg_label.pack(side=tk.LEFT, padx=(6, 0))
         self.caption_bg_opacity.trace_add("write", self._update_caption_bg_label)
 
+        ttk.Label(settings, text="Edge:").grid(row=8, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        edge = ttk.Frame(settings)
+        edge.grid(row=8, column=1, columnspan=2, sticky=tk.W, pady=4)
+        ttk.Combobox(
+            edge, textvariable=self.caption_bg_edge_style, values=list(CAPTION_EDGE_STYLES.keys()),
+            width=10, state="readonly",
+        ).pack(side=tk.LEFT)
+        ttk.Label(edge, text="  Size:").pack(side=tk.LEFT)
+        ttk.Spinbox(edge, textvariable=self.caption_bg_edge_size, from_=0, to=200,
+                    increment=5, width=5).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Label(edge, text="px").pack(side=tk.LEFT, padx=(2, 0))
+
         # ---- Text transitions --------------------------------------------
         tr = ttk.LabelFrame(right_col, text="Caption Transitions", padding=8)
         tr.pack(fill=tk.X, pady=(0, 8))
@@ -449,6 +464,8 @@ class AudiogrammerApp:
             "font_weight": self.font_weight.get(),
             "caption_position": self.caption_position.get(),
             "caption_bg_opacity": self.caption_bg_opacity.get(),
+            "caption_bg_edge_style": self.caption_bg_edge_style.get(),
+            "caption_bg_edge_size": self._edge_size(),
             "text_in": self.text_in.get(),
             "text_out": self.text_out.get(),
             "text_transition_duration": self._transition_duration(),
@@ -507,6 +524,9 @@ class AudiogrammerApp:
         self.text_out.set(text_out if text_out in TRANSITION_STYLES else "None")
         self.text_transition_duration.set(data.get("text_transition_duration", 0.3))
         self.caption_bg_opacity.set(data.get("caption_bg_opacity", 73.0))
+        edge_style = data.get("caption_bg_edge_style", "Hard")
+        self.caption_bg_edge_style.set(edge_style if edge_style in CAPTION_EDGE_STYLES else "Hard")
+        self.caption_bg_edge_size.set(data.get("caption_bg_edge_size", 40))
         self.text_color = data.get("text_color", "#FFFFFF")
         self._text_color_btn.config(bg=self.text_color)
         self.highlight_color = data.get("highlight_color", "#FFDC00")
@@ -727,6 +747,12 @@ class AudiogrammerApp:
 
     def _update_opacity_label(self, *_) -> None:
         self._wm_opacity_label.config(text=f"{int(self.wm_opacity.get())}%")
+
+    def _edge_size(self) -> int:
+        try:
+            return max(0, int(self.caption_bg_edge_size.get()))
+        except tk.TclError:
+            return 0
 
     def _update_caption_bg_label(self, *_) -> None:
         self._caption_bg_label.config(text=f"{int(self.caption_bg_opacity.get())}%")
@@ -975,6 +1001,8 @@ class AudiogrammerApp:
                 text_transition=self._build_text_transition(),
                 caption_position=CAPTION_POSITIONS.get(self.caption_position.get(), "bottom"),
                 caption_bg_opacity=self.caption_bg_opacity.get() / 100.0,
+                caption_bg_edge_style=CAPTION_EDGE_STYLES.get(self.caption_bg_edge_style.get(), "hard"),
+                caption_bg_edge_size=self._edge_size(),
                 cancel_event=self._cancel_event,
                 status_callback=status,
                 progress_callback=video_progress,
