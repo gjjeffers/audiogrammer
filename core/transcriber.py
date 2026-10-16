@@ -99,7 +99,18 @@ def transcribe(
 ) -> List[Segment]:
     import whisper
 
-    from core.trim import should_trim, slice_audio
+    from core.audio_trim import trim_audio_ffmpeg
+    from core.trim import should_trim
+
+    sr = whisper.audio.SAMPLE_RATE
+
+    # Trim first, so Whisper only ever sees (and spends time on) the selected window.
+    if should_trim(trim_start, trim_end):
+        if status_callback:
+            status_callback("Trimming audio...")
+        samples = trim_audio_ffmpeg(audio_path, trim_start, trim_end, sr=sr)
+    else:
+        samples = whisper.load_audio(audio_path)
 
     if status_callback:
         status_callback(f"Loading Whisper model '{model_size}'...")
@@ -109,10 +120,6 @@ def transcribe(
     if status_callback:
         status_callback("Transcribing audio (this may take a moment)...")
 
-    sr = whisper.audio.SAMPLE_RATE
-    samples = whisper.load_audio(audio_path)
-    if should_trim(trim_start, trim_end):
-        samples = slice_audio(samples, sr, trim_start, trim_end)
     result = model.transcribe(samples, word_timestamps=True)
     duration = len(samples) / sr
 

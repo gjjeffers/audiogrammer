@@ -19,16 +19,25 @@ def _install_fake_whisper(monkeypatch, captured):
     monkeypatch.setitem(sys.modules, "whisper", fake)
 
 
-def test_transcribe_slices_audio_window(monkeypatch):
+def test_transcribe_trims_with_ffmpeg_before_whisper(monkeypatch):
     captured = {}
     _install_fake_whisper(monkeypatch, captured)
+    import core.audio_trim as audio_trim
     from core.transcriber import transcribe
+
+    calls = []
+
+    def fake_trim(path, start, end, sr=16000):
+        calls.append((path, start, end, sr))
+        return np.zeros(int((end - start) * sr), dtype=np.float32)
+
+    monkeypatch.setattr(audio_trim, "trim_audio_ffmpeg", fake_trim)
 
     transcribe("episode.mp3", model_size="base", trim_start=2.0, trim_end=5.0)
 
-    # 3 seconds of a 16kHz stream
+    assert calls == [("episode.mp3", 2.0, 5.0, 16000)]
+    # Whisper receives only the 3s trimmed window, not the full 10s file
     assert len(captured["audio"]) == 3 * 16000
-    assert captured["audio"][0] == 2 * 16000
 
 
 def test_transcribe_no_trim_passes_full_audio(monkeypatch):
