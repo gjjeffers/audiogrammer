@@ -152,11 +152,9 @@ class AudiogrammerApp:
         ttk.Entry(files, textvariable=self.audio_path).grid(row=1, column=1, sticky=tk.EW, padx=(0, 4), pady=4)
         ttk.Button(files, text="Browse…", command=self._browse_audio).grid(row=1, column=2, pady=4)
 
-        trim_row = ttk.Frame(files)
-        trim_row.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=4)
-        ttk.Button(trim_row, text="Trim Audio…", command=self._open_trim_dialog).pack(side=tk.LEFT)
-        self._trim_status_label = ttk.Label(trim_row, text="(full)", foreground="#888888")
-        self._trim_status_label.pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Label(files, text="Trim:").grid(row=2, column=0, sticky=tk.W, padx=(0, 6), pady=4)
+        self._trim_status_label = ttk.Label(files, text="(full)", foreground="#888888")
+        self._trim_status_label.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=4)
         self.trim_enabled.trace_add("write", self._update_trim_status)
         self.trim_start.trace_add("write", self._update_trim_status)
         self.trim_end.trace_add("write", self._update_trim_status)
@@ -368,6 +366,10 @@ class AudiogrammerApp:
         btn_row = ttk.Frame(root_frame)
         btn_row.pack(pady=(4, 6))
 
+        # Trim comes first: it runs before transcription in the workflow.
+        self._trim_btn = ttk.Button(btn_row, text="Trim Audio…", command=self._open_trim_dialog)
+        self._trim_btn.pack(side=tk.LEFT, padx=(0, 6))
+
         self._transcribe_btn = ttk.Button(
             btn_row, text="Transcribe & Review", command=self._transcribe_and_review
         )
@@ -380,10 +382,6 @@ class AudiogrammerApp:
             btn_row, text="Cancel", command=self._cancel, state=tk.DISABLED
         )
         self._cancel_btn.pack(side=tk.LEFT)
-
-        ttk.Button(btn_row, text="Restore Defaults", command=self._restore_defaults).pack(
-            side=tk.LEFT, padx=(6, 0)
-        )
 
         # ---- Progress area -----------------------------------------------
         progress_frame = ttk.Frame(root_frame)
@@ -587,6 +585,8 @@ class AudiogrammerApp:
         m.add_separator()
         m.add_command(label="Import from File…", command=self._import_config)
         m.add_command(label="Export to File…", command=self._export_config)
+        m.add_separator()
+        m.add_command(label="Restore Defaults", command=self._restore_defaults)
 
     def _apply_config(self, data: dict) -> None:
         self._apply_settings(data)
@@ -802,6 +802,7 @@ class AudiogrammerApp:
         self._running = True
         self._cancel_event.clear()
         self._transcribe_btn.config(state=tk.DISABLED)
+        self._trim_btn.config(state=tk.DISABLED)
         self._gen_btn.config(state=tk.DISABLED)
         self._cancel_btn.config(state=tk.NORMAL)
         self._progress_var.set(0)
@@ -1094,5 +1095,6 @@ class AudiogrammerApp:
         self._progress_bar.stop()
         self._progress_bar.config(mode="determinate")
         self._transcribe_btn.config(state=tk.NORMAL)
+        self._trim_btn.config(state=tk.NORMAL)
         self._gen_btn.config(state=tk.NORMAL)
         self._cancel_btn.config(state=tk.DISABLED)
