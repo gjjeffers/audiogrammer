@@ -32,6 +32,18 @@ def _hex_to_rgb(hex_color: str) -> tuple:
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
 
 
+def _audio_duration(path: str) -> float:
+    try:
+        from moviepy import AudioFileClip
+    except ImportError:
+        from moviepy.editor import AudioFileClip  # type: ignore[no-redef]
+    clip = AudioFileClip(path)
+    try:
+        return float(clip.duration)
+    finally:
+        clip.close()
+
+
 class AudiogrammerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -100,6 +112,7 @@ class AudiogrammerApp:
         self.trim_enabled = tk.BooleanVar(value=False)
         self.trim_start = tk.DoubleVar(value=0.0)
         self.trim_end = tk.DoubleVar(value=0.0)
+        self.auto_trim_silence = tk.BooleanVar(value=False)
         self._audio_duration = 0.0
         self._overview_cache: dict = {}
 
@@ -158,6 +171,11 @@ class AudiogrammerApp:
         self.trim_enabled.trace_add("write", self._update_trim_status)
         self.trim_start.trace_add("write", self._update_trim_status)
         self.trim_end.trace_add("write", self._update_trim_status)
+
+        ttk.Checkbutton(
+            files, text="Auto-trim silence before first / after last spoken word",
+            variable=self.auto_trim_silence,
+        ).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(0, 4))
 
         files.columnconfigure(1, weight=1)
 
@@ -493,6 +511,7 @@ class AudiogrammerApp:
             "trim_enabled": self.trim_enabled.get(),
             "trim_start": self.trim_start.get(),
             "trim_end": self.trim_end.get(),
+            "auto_trim_silence": self.auto_trim_silence.get(),
         }
 
     def _apply_settings(self, data: dict) -> None:
@@ -555,6 +574,7 @@ class AudiogrammerApp:
         self.trim_enabled.set(data.get("trim_enabled", False))
         self.trim_start.set(data.get("trim_start", 0.0))
         self.trim_end.set(data.get("trim_end", 0.0))
+        self.auto_trim_silence.set(data.get("auto_trim_silence", False))
 
     # ------------------------------------------------------------------
     # Configuration export / import / presets
@@ -924,6 +944,9 @@ class AudiogrammerApp:
             if self._cancel_event.is_set():
                 raise InterruptedError
 
+            segments, _, _ = self._auto_trim_to_speech(
+                audio_path, segments, trim_start, trim_end
+            )
             self._queue.put(("show_transcript", segments))
 
         except InterruptedError:
@@ -931,6 +954,32 @@ class AudiogrammerApp:
             self._queue.put(("transcribe_cancelled", None))
         except Exception as exc:
             self._queue.put(("error", str(exc)))
+
+    def _auto_trim_to_speech(self, audio_path, segments, trim_start, trim_end):
+        """Narrow the trim window to the first/last spoken word when enabled.
+
+        Returns ``(segments, trim_start, trim_end)``. Segments are shifted so
+        they stay aligned with the narrowed window, and the app's trim fields
+        are updated (via the queue) so the render and status label match.
+        """
+        if not self.auto_trim_silence.get():
+            return segments, trim_start, trim_end
+
+        from core.trim import shift_segments, speech_window
+
+        base = trim_start if trim_start is not None else 0.0
+        if trim_start is not None and trim_end is not None:
+            duration = trim_end - trim_start
+        else:
+            duration = _audio_duration(audio_path) - base
+        window = speech_window(segments, duration)
+        if window is None:
+            return segments, trim_start, trim_end
+
+        lead, tail = window
+        new_start, new_end = base + lead, base + tail
+        self._queue.put(("speech_trim", (new_start, new_end)))
+        return shift_segments(segments, lead), new_start, new_end
 
     def _render_worker(
         self, bg_path: str, audio_path: str, output_path: str, segments, sig
@@ -956,6 +1005,12 @@ class AudiogrammerApp:
                 )
                 if self._cancel_event.is_set():
                     raise InterruptedError
+                segments, new_start, new_end = self._auto_trim_to_speech(
+                    audio_path, segments, trim_start, trim_end
+                )
+                if (new_start, new_end) != (trim_start, trim_end):
+                    trim_start, trim_end = new_start, new_end
+                    sig = (sig[0], True, round(trim_start, 3), round(trim_end, 3), sig[4])
                 self._queue.put(("store_transcript", (segments, sig)))
 
             self._queue.put(("switch_determinate", 0))
@@ -1059,6 +1114,11 @@ class AudiogrammerApp:
                         on_render=self._on_transcript_update,
                         on_cancel=self._on_transcript_keep_original,
                     )
+                elif kind == "speech_trim":
+                    start, end = value
+                    self.trim_start.set(start)
+                    self.trim_end.set(end)
+                    self.trim_enabled.set(True)
                 elif kind == "store_transcript":
                     segs, sig = value
                     self._stored_segments = segs

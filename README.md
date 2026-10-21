@@ -119,6 +119,8 @@ Open the **Trim Audio…** dialog to select a highlight window instead of render
 
 Trimming happens **before** transcription, so picking a 60-second window means Whisper only processes those 60 seconds — dramatically faster than transcribing a full episode. The selection resets when you choose a different audio file.
 
+Tick **Auto-trim silence before first / after last spoken word** to have the trim window narrowed automatically after transcription: it moves to 0.25 s before the first word and 0.25 s after the last word, and the captions are shifted to match. Combine it with a manual trim to auto-trim within the chosen window.
+
 ### Waveform Settings
 
 Open via the **Waveform Settings…** button. The status next to the button shows `(on)` / `(off)`. The overlay draws an audio-driven visualization on top of the background.

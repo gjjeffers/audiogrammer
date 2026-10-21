@@ -101,3 +101,40 @@ def test_apply_trim_passthrough_when_no_trim():
     result = apply_trim(audio, None, None)
     assert result is audio
     assert audio.calls == []
+
+
+def _segs():
+    from core.transcriber import Segment, Word
+    words = [Word("hello", 3.0, 3.4), Word("world", 3.5, 4.0), Word("bye", 7.0, 7.6)]
+    return [Segment("hello world bye", 2.0, 8.0, words)]
+
+
+def test_speech_window_pads_first_and_last_word():
+    from core.trim import speech_window
+    assert speech_window(_segs(), duration=12.0, padding=0.25) == pytest.approx((2.75, 7.85))
+
+
+def test_speech_window_clamps_to_audio_bounds():
+    from core.trim import speech_window
+    assert speech_window(_segs(), duration=7.7, padding=0.25) == pytest.approx((2.75, 7.7))
+
+
+def test_speech_window_none_without_words():
+    from core.trim import speech_window
+    assert speech_window([], duration=10.0) is None
+
+
+def test_speech_window_none_when_nothing_to_trim():
+    from core.trim import speech_window
+    from core.transcriber import Segment, Word
+    segs = [Segment("hi", 0.0, 10.0, [Word("hi", 0.1, 9.9)])]
+    assert speech_window(segs, duration=10.0, padding=0.25) is None
+
+
+def test_shift_segments_moves_times_and_does_not_mutate():
+    from core.trim import shift_segments
+    segs = _segs()
+    out = shift_segments(segs, 2.75)
+    assert out[0].words[0].start == pytest.approx(0.25)
+    assert out[0].start == pytest.approx(0.0)  # clamped at zero
+    assert segs[0].words[0].start == 3.0
