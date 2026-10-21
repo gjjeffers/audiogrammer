@@ -28,3 +28,7 @@ def test_save_then_load_roundtrips_trim(tmp_path, monkeypatch):
     assert loaded["trim_enabled"] is True
     assert loaded["trim_start"] == 12.5
     assert loaded["trim_end"] == 72.0
+
+
+def test_defaults_include_auto_trim_silence():
+    assert settings.DEFAULTS["auto_trim_silence"] is False

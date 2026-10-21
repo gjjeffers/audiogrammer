@@ -58,6 +58,7 @@ DEFAULTS = {
     "trim_enabled": False,
     "trim_start": 0.0,
     "trim_end": 0.0,
+    "auto_trim_silence": False,
 }
 
 

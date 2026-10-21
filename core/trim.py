@@ -1,7 +1,16 @@
 """Pure helpers for the audio trim feature — no tkinter, no I/O."""
 from __future__ import annotations
 
+from typing import List, Optional, Tuple
+
 import numpy as np
+
+from core.transcriber import Segment, Word
+
+# Silence kept before the first and after the last spoken word when auto-trimming.
+SPEECH_PADDING = 0.25
+# Auto-trim is skipped when it would cut less than this much (seconds).
+_MIN_AUTO_TRIM = 0.05
 
 
 def slice_audio(samples: np.ndarray, sr: int, start: float, end: float) -> np.ndarray:
@@ -65,3 +74,39 @@ def apply_trim(audio, trim_start, trim_end):
     if should_trim(trim_start, trim_end):
         return audio.subclipped(trim_start, trim_end)
     return audio
+
+
+def speech_window(
+    segments: List[Segment],
+    duration: float,
+    padding: float = SPEECH_PADDING,
+) -> Optional[Tuple[float, float]]:
+    """Window (relative to the transcribed audio) from just before the first
+    spoken word to just after the last one, or None if nothing worth trimming.
+
+    ``duration`` is the length of the audio the segments were transcribed from.
+    """
+    words = [w for seg in segments for w in seg.words if w.text.strip()]
+    if not words:
+        return None
+    start = max(0.0, min(w.start for w in words) - padding)
+    end = min(duration, max(w.end for w in words) + padding)
+    if end <= start or (start < _MIN_AUTO_TRIM and duration - end < _MIN_AUTO_TRIM):
+        return None
+    return start, end
+
+
+def shift_segments(segments: List[Segment], delta: float) -> List[Segment]:
+    """Return copies of ``segments`` with every time moved earlier by ``delta`` seconds."""
+    def sh(t: float) -> float:
+        return max(0.0, t - delta)
+
+    return [
+        Segment(
+            text=seg.text,
+            start=sh(seg.start),
+            end=sh(seg.end),
+            words=[Word(text=w.text, start=sh(w.start), end=sh(w.end)) for w in seg.words],
+        )
+        for seg in segments
+    ]
