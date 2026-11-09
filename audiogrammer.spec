@@ -38,6 +38,11 @@ a = Analysis(
     ],
     hiddenimports=[
         *collect_submodules('whisper'),
+        # tiktoken discovers its encodings through the tiktoken_ext namespace
+        # package at runtime, which PyInstaller's static analysis can't see.
+        # Whisper's tokenizer needs it as soon as a transcription starts.
+        *collect_submodules('tiktoken_ext'),
+        'tiktoken_ext.openai_public',
         *moviepy_hidden,
         *imageio_hidden,
         *imageio_ffmpeg_hidden,
