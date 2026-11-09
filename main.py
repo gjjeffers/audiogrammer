@@ -66,7 +66,32 @@ def _report_failures(failures: list[tuple[str, str]]) -> None:
         print("\nImport errors:\n" + details, file=sys.stderr)
 
 
+def _selftest() -> int:
+    """Headless check used by the release workflow on the built EXE.
+
+    Imports everything the app needs at startup and loads the Whisper tokenizer
+    (which needs tiktoken's plugin modules) without opening a window.
+    """
+    failures = _check_deps()
+    if not failures:
+        try:
+            import gui.app  # noqa: F401
+            from whisper.tokenizer import get_tokenizer
+            get_tokenizer(multilingual=True)
+        except Exception:
+            failures.append(("application", traceback.format_exc()))
+    if failures:
+        for pkg, tb in failures:
+            print(f"--- {pkg} ---\n{tb}", file=sys.stderr)
+        return 1
+    print("selftest OK")
+    return 0
+
+
 def main() -> None:
+    if "--selftest" in sys.argv:
+        sys.exit(_selftest())
+
     failures = _check_deps()
     if failures:
         _report_failures(failures)
